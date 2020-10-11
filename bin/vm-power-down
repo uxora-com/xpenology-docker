@@ -1,0 +1,32 @@
+#!/bin/bash
+
+: ${VM_TIMEOUT_POWERDOWN:='10'}
+
+echo "INFO: Shutting down VM..."
+processID=$(cat /run/qemu.pid)
+
+#Gracefull stop via power button
+echo system_powerdown | nc -U /run/qemu-monitor.sock
+
+#Wait for process die
+n=0
+while [ -e /proc/$processID ]
+do
+    sleep 1
+	((++n))
+	[[ $n -gt ${VM_TIMEOUT_POWERDOWN} ]] && break
+done
+
+[[ -e /proc/$processID ]] \
+	&& echo "WARNING: Timeout reached, force quit vm ..." \
+	&& echo quit | nc -U /run/qemu-monitor.sock
+
+sleep 1
+[[ -e /proc/$processID ]] \
+	&& echo "WARNING: Timeout reached, killing vm ..." \
+	&& kill -9 $processID
+
+#Delete pid file
+rm /run/qemu.pid
+#1 Second grace for Device unlocking
+sleep 1
