@@ -7,6 +7,11 @@ So technicaly it can run any bootloader you provide.
 
 The project is based on [segator/xpenology-docker](https://github.com/segator/xpenology-docker) project which is based on [BBVA/kvm](https://github.com/BBVA/kvm) project.
 
+## Repositories
+
+Source code : https://github.com/uxora-com/xpenology-docker
+
+Docker image: https://hub.docker.com/r/uxora/xpenology
 
 ## Features
 
