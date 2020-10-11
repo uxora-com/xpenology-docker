@@ -120,7 +120,7 @@ if [[ ! -f ${BOOTLOADER_FULLPATH} ]] ; then
 fi
 
 # Changed bootloader size checking from error to warning
-find ${DISK_PATH} -name bootloader.img -size +48M -size -52M | grep -q . \
+find ${DISK_PATH} -name ${BOOTLOADER_FULLPATH##*/} -size +48M -size -52M | grep -q . \
 	&& log "INFO" "${BOOTLOADER_FULLPATH} file size seems valid for synoboot." \
 	|| ( log "WARNING" "${BOOTLOADER_FULLPATH} file size does not seem correct for synoboot." )
 
