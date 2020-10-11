@@ -1,0 +1,2 @@
+#!/bin/bash
+echo "$@" | nc -U /run/qemu-monitor.sock

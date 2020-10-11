@@ -1,0 +1,19 @@
+#!/bin/bash
+
+: ${DISK_PATH:='/image'}
+: ${BOOTLOADER_AS_USB:='Y'}
+
+BOOTLOADER_FULLPATH="${DISK_PATH%/}/bootloader.raw"
+DEV_TYPE="sata"
+[[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]] && DEV_TYPE="usb"
+
+echo "INFO: Creating live snapshot ..."
+
+echo "## INFO: Disabling bootloader disk ..."
+echo "eject drive-${DEV_TYPE}-disk-bootloader" | nc -U /run/qemu-monitor.sock
+
+echo "## INFO: Saving vm ..."
+echo savevm $1 | nc -U /run/qemu-monitor.sock
+
+echo "## INFO: Renabling bootloader disk ..."
+echo "change drive-${DEV_TYPE}-disk-bootloader ${BOOTLOADER_FULLPATH}" | nc -U /run/qemu-monitor.sock
