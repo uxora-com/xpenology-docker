@@ -1,6 +1,6 @@
 # Synopsis
 
-KVM VirtualMachine of Xpenology dsm (6.2.3:lastest tested) running in a docker container, which can be run directly from docker-hub by specifying a BOOTLOADER_URL.
+KVM VirtualMachine of Xpenology dsm (6.2.3:latest tested) running in a docker container, which can be run directly from docker-hub by specifying a BOOTLOADER_URL.
 
 This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3 with jun's xpenology bootloader.
 So technicaly it can run any bootloader you provide.
