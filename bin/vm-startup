@@ -1,0 +1,254 @@
+#!/bin/bash
+set -e
+# This entrypoint for KVM container configures and attaches network bridges to
+# the VM and starts KVM with the selected options.
+
+# See Dockerfile reference and README.md for further info.
+
+: ${LAUNCHER:='qemu-system-x86_64'}
+: ${DNSMASQ_CONF_DIR:='/etc/dnsmasq.d'}
+: ${DNSMASQ:='/usr/sbin/dnsmasq'}
+: ${QEMU_CONF_DIR:='/etc/qemu-kvm'}
+: ${DISABLE_VGA:='Y'}
+
+: ${CPU:='host'}
+: ${THREADS:='1'}
+: ${CORES:='1'}
+: ${RAM:='2048'}
+
+: ${DISK_SIZE:='16'}
+: ${DISK_FORMAT:='qcow2'}
+: ${DISK_CACHE:='none'}
+: ${DISK_PATH:='/image'}
+
+: ${BOOTLOADER_URL:='http://host/path/bootloader.img'}
+: ${BOOTLOADER_AS_USB:='Y'}
+
+: ${VM_ENABLE_VIRTIO:="Y"}
+: ${VM_ENABLE_9P:="Y"}
+: ${VM_ENABLE_VGA:="N"}
+: ${VM_CUSTOM_OPTS:=''}
+
+: ${DEBUG:='Y'}
+
+
+# Functions
+# ######################################
+
+log () {
+  case "$1" in
+    INFO | WARNING | ERROR )
+      echo "$1: ${@:2}"
+      ;;
+    DEBUG)
+      if [[ "$DEBUG" == [Yy1]* ]]; then
+          echo "$1: ${@:2}"
+      fi
+      ;;
+    *)
+      echo "-- $@"
+      ;;
+  esac
+}
+
+setupDhcp () {
+  CIDR="24"
+  MAC="$1"
+  IP="$2"
+  #HOSTNAME=$(hostname -s)
+  HOSTNAME="VirtualMachine"
+  # dnsmasq configuration:
+  log "INFO" "DHCP configured to serve IP $IP/$CIDR via dockerbridge"
+  DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-range=$IP,$IP --dhcp-host=$MAC,,$IP,$HOSTNAME,infinite --dhcp-option=option:netmask,255.255.255.0"
+  # Create lease File FOr faster resolve
+  echo "0 $MAC $IP $HOSTNAME 01:${MAC}" > /var/lib/misc/dnsmasq.leases
+  chmod 644 /var/lib/misc/dnsmasq.leases
+}
+
+# Setup macvtap device to connect later the VM and setup a new macvlan devide
+# to connect the host machine to the network
+configureNetworks () {
+  #For now we define static MAC because DHCP is very slow if MAC change every VM Boot
+  #Create bridge with static IP for the VM Guest(COnnection VM-Docker)
+  brctl addbr dockerbridge
+  ip addr add ${VM_IP%.*}.1/24 broadcast ${VM_IP%.*}.255 dev dockerbridge
+  ip link set dockerbridge up
+  #QEMU Works with taps, set tap to the bridge created
+  ip tuntap add dev vm-nat mode tap
+  ip link set vm-nat up promisc on
+  brctl addif dockerbridge vm-nat
+
+  #Add internet connection to the VM
+  iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+  iptables -t nat -A PREROUTING -i eth0 -p tcp  -j DNAT --to $VM_IP
+  iptables -t nat -A PREROUTING -i eth0 -p udp  -j DNAT --to $VM_IP
+  
+  #Enable port forwarding flag
+  sysctl -w net.ipv4.ip_forward=1
+  
+  #For now we define static MAC because DHCP is very slow if DHCP change every VM Boot
+  setupDhcp $VM_MAC $VM_IP
+}
+
+# ######################################
+# ######################################
+# 				MAIN 
+# ######################################
+# ######################################
+
+
+# Download and check synoboot bootloader
+# ######################################
+
+BOOTLOADER_FULLPATH="${DISK_PATH%/}/bootloader.raw"
+
+for p in ${DISK_PATH} ${DISK_PATH}; do
+	[[ ! -d $p ]] && mkdir -p $p
+done
+
+# Removed BOOTLOADER_REPLACE_IFEXISTS, otherwise it gonna do replace at every boot
+#: ${BOOTLOADER_REPLACE_IFEXISTS:='N'}
+#[[ "${BOOTLOADER_REPLACE_IFEXISTS}" == [Yy1]* ]] && [[ ! -f ${BOOTLOADER_FULLPATH} ]] \
+#	&& mv ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH}.old \
+#	&& log "INFO" "Old synoboot has been renamed with .old"
+
+if [[ ! -f ${BOOTLOADER_FULLPATH} ]] ; then
+	log "INFO" "Start downloading bootloader from URL ..."
+	wget --no-check-certificate -q --show-progress --progress=dot:giga ${BOOTLOADER_URL} -O ${BOOTLOADER_FULLPATH} \
+		&& log "INFO" "Bootloader has been successfully downloaded from URL." \
+		|| ( log "ERROR" "Bootloader cannot be downloaded from URL." && exit 10 )
+fi
+
+# Changed bootloader size checking from error to warning
+find ${DISK_PATH} -name bootloader.img -size +48M -size -52M | grep -q . \
+	&& log "INFO" "${BOOTLOADER_FULLPATH} file size seems valid for synoboot." \
+	|| ( log "WARNING" "${BOOTLOADER_FULLPATH} file size does not seem correct for synoboot." )
+
+# Convert bootloader to other format (qcow2 for now)
+#[[ ${DISK_FORMAT} == "qcow2" ]] \
+#	&& qemu-img convert -f raw -O ${DISK_FORMAT} ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT} \
+#	&& log "INFO" "Bootloader has been converted to ${DISK_FORMAT}" \
+#	&& BOOTLOADER_FULLPATH=${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}
+
+# Set bootloader as USB or as SATA disk
+# ######################################
+KVM_SYNOBOOT="-device 'ahci,id=ahci0,multifunction=on,bus=pcie.0,addr=0x7'"
+
+if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]]; then
+	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ich9-usb-ehci1,id=usb-hub0,multifunction=on' -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-usb-disk-bootloader,cache=writeback' -device 'usb-storage,bus=usb-hub0.0,port=1,drive=drive-usb-disk-bootloader,id=usb-disk-bootloader,bootindex=100,removable=on'"
+else
+	# Use bootloader as first sata disk
+	KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},if=none,id=drive-sata-disk-bootloader,format=${BOOTLOADER_FULLPATH##*.},cache=none,aio=native,detect-zeroes=on'"
+	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ide-hd,bus=ahci0.0,drive=drive-sata-disk-bootloader,id=sata-disk-bootloader,bootindex=100,removable=on'"
+fi
+
+# Add SATA disks
+# ######################################
+TMP_KVM_BLK_OPTS=""
+i=0
+for size in $DISK_SIZE ; do
+	((++i))
+	fpath_diskname="${DISK_PATH%/}/vm-disk-${i}.${DISK_FORMAT}"
+	if [[ ! ${size%[Gg]} -eq 0 ]]; then
+		[[ ! -f ${fpath_diskname} ]] \
+			&& log "INFO" "No Initial Disk found, creating disk ${fpath_diskname}" \
+			&& qemu-img create -f ${DISK_FORMAT} ${fpath_diskname} ${size%[Gg]}G \
+			|| log "ERROR" "No Initial Disk found, CANNOT create disk ${fpath_diskname}"
+			
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname},if=none,id=drive-sata${i},format=${DISK_FORMAT},cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'ide-hd,bus=ahci0.${i},drive=drive-sata${i},id=sata${i}'"
+	fi
+done
+: ${KVM_BLK_OPTS:="${TMP_KVM_BLK_OPTS}"}
+
+# Set Qemu option
+# ######################################
+: ${KVM_OPTS:="\
+  -machine q35 \
+  -nodefaults \
+  -realtime mlock=off \
+  -msg timestamp=on \
+  -chardev pty,id=charserial0 \
+  -device isa-serial,chardev=charserial0,id=serial0 \
+  -serial stdio \
+  -monitor unix:/run/qemu-monitor.sock,server,nowait \
+  -pidfile /run/qemu.pid \
+  "}
+
+[[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && KVM_OPTS="${KVM_OPTS} -device 'virtio-balloon-pci,id=balloon0,bus=pcie.0,addr=0x3'"
+
+# Set Qemu CPU and RAM
+# ######################################
+SMP=$(($CORES*$THREADS))
+: ${KVM_CPU_OPTS:="-m $RAM -cpu ${CPU} -smp $SMP,sockets=1,cores=$CORES,threads=$THREADS"}
+
+# Set 9p
+# ######################################
+: ${KVM_9P:=""}
+[[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && [[ "${VM_ENABLE_9P}" == [Yy1]* ]] \
+	&& KVM_9P="-fsdev local,security_model=passthrough,id=fsdev-fs0,path=/datashare -device virtio-9p-pci,id=fs0,fsdev=fsdev-fs0,mount_tag=hostdata,bus=pcie.0"
+
+# Enable KVM support only if the host supports it
+# ######################################
+if [[ $(grep -e vmx -e svm /proc/cpuinfo) ]]; then
+  log "INFO" "KVM acceleration enabled"
+  KVM_OPTS="$KVM_OPTS -enable-kvm -machine accel=kvm,usb=off "
+else
+  log "WARNING" "KVM acceleration disabled"
+  #exit -20
+fi
+
+# Set Qemu graphics & vnc 
+# ######################################
+if [[ "$VM_ENABLE_VGA" == [Yy1]* ]]; then
+  : ${KVM_VIDEO_OPTS:="-vga qxl -vnc 0.0.0.0:0 -k en-us"}
+else
+  : ${KVM_VIDEO_OPTS:="-nographic"}
+fi
+
+# Configure Network
+# ######################################
+log "INFO" "Configuring network ..."
+DEFAULT_ROUTE=$(ip route | grep default | awk '{print $3}')
+
+configureNetworks
+KVM_NET_OPTS="-netdev tap,ifname=vm-nat,script=no,downscript=no,id=hostnet0"
+#KVM_NET_OPTS="-netdev tap,vhost=on,id=hostnet0,fd=3 3<>/dev/vm-nat"
+#KVM_NET_OPTS="-netdev user,hostfwd=tcp:127.0.0.1:5000-:5000"
+[[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] \
+	&& KVM_NET_OPTS="${KVM_NET_OPTS} -device virtio-net-pci,netdev=hostnet0,mac=$VM_MAC,id=net0" \
+	|| KVM_NET_OPTS="${KVM_NET_OPTS} -device e1000,netdev=hostnet0,mac=$VM_MAC,id=net0"
+
+
+# Hack for guest VMs complaining about "bad udp checksums in 5 packets"
+iptables -A POSTROUTING -t mangle -p udp --dport bootpc -j CHECKSUM --checksum-fill
+
+# Build DNS options from container /etc/resolv.conf
+nameservers=($(grep '^nameserver' /etc/resolv.conf | sed 's/nameserver //'))
+searchdomains=$(grep '^search' /etc/resolv.conf | sed 's/search //' | sed 's/ /,/g')
+domainname=$(echo $searchdomains | awk -F"," '{print $1}')
+
+for nameserver in "${nameservers[@]}"; do
+  [[ -z $DNS_SERVERS ]] && DNS_SERVERS=$nameserver || DNS_SERVERS="$DNS_SERVERS,$nameserver"
+done
+DNSMASQ_OPTS="$DNSMASQ_OPTS                         \
+  --dhcp-option=option:dns-server,$DNS_SERVERS      \
+  --dhcp-option=option:router,${VM_IP%.*}.1         \
+  --dhcp-option=option:domain-search,$searchdomains \
+  --dhcp-option=option:domain-name,$domainname      \
+  "
+[[ -z $(hostname -d) ]] || DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-name,$(hostname -d)"
+
+log "INFO" "Lauching dnsmasq"
+log "DEBUG" "dnsmasq options: $DNSMASQ_OPTS"
+$DNSMASQ $DNSMASQ_OPTS
+
+
+# Launching Qemu VM command
+# ######################################
+log "INFO" "Launching qemu-kvm ..."
+COMMAND="$LAUNCHER $KVM_SYNOBOOT $KVM_BLK_OPTS $KVM_OPTS $KVM_VIDEO_OPTS $KVM_CPU_OPTS $KVM_NET_OPTS $KVM_9P $VM_CUSTOM_OPTS $@"
+log "DEBUG" "${COMMAND}"
+trap '/usr/bin/vm-power-down' SIGTERM
+trap '/usr/bin/vm-power-down' SIGINT
+eval exec ${COMMAND}
