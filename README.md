@@ -35,7 +35,7 @@ This image provides some special features to get the VM running as straightforwa
 $ docker run --privileged --cap-add=NET_ADMIN \
 	--device=/dev/net/tun --device=/dev/kvm \
 	-e BOOTLOADER_URL="http://example.com/path/synoboot.img" \
-	uxora-com/xpenology
+	uxora/xpenology
 
 # Run with more specific parameters
 $ docker run --privileged --cap-add=NET_ADMIN \
@@ -50,7 +50,7 @@ $ docker run --privileged --cap-add=NET_ADMIN \
 	-e BOOTLOADER_AS_USB="Y" \
 	-e VM_ENABLE_VIRTIO="Y" \
 	-v /shared/data:/datashare \
-	uxora-com/xpenology
+	uxora/xpenology
 ```
 
 
