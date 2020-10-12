@@ -1,3 +1,23 @@
 #!/bin/bash
+
+: ${DISK_PATH:='/image'}
+: ${BOOTLOADER_AS_USB:='Y'}
+
+[[ "x$1" == "x" ]] \
+	&& echo "ERROR: Missing argument: string expected" \
+	&& exit 254
+
+BOOTLOADER_FULLPATH="${DISK_PATH%/}/bootloader.raw"
+DEV_TYPE="sata"
+[[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]] && DEV_TYPE="usb"
+
+echo "INFO: Restoring live snapshot $1 ..."
+
+echo "## INFO: Disabling bootloader disk ..."
+echo "eject drive-${DEV_TYPE}-disk-bootloader" | nc -U /run/qemu-monitor.sock
+
+echo "## INFO: Loading vm ..."
 echo loadvm $1 | nc -U /run/qemu-monitor.sock
 
+echo "## INFO: Renabling bootloader disk ..."
+echo "change drive-${DEV_TYPE}-disk-bootloader ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH##*.}" | nc -U /run/qemu-monitor.sock
