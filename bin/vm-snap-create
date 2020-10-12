@@ -16,4 +16,4 @@ echo "## INFO: Saving vm ..."
 echo savevm $1 | nc -U /run/qemu-monitor.sock
 
 echo "## INFO: Renabling bootloader disk ..."
-echo "change drive-${DEV_TYPE}-disk-bootloader ${BOOTLOADER_FULLPATH}" | nc -U /run/qemu-monitor.sock
+echo "change drive-${DEV_TYPE}-disk-bootloader ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH##*.}" | nc -U /run/qemu-monitor.sock
