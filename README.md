@@ -68,8 +68,9 @@ Multiples environment variables can be modified to alter default runtime.
 * RAM: (Default "512") number of ram memory in MB
 
 * DISK_SIZE:(Default "16") Size of virtual disk in GB
-** Set DISK_SIZE=0, if you don't want to have a virtual disk
-** Set more values separated by space, to have more virtual disk (ie. DISK_SIZE="8 16")
+	* Set DISK_SIZE=0, if you don't want to have a virtual disk
+	* Set more values separated by space, to have more virtual disk (ie. DISK_SIZE="8 16")
+
 * DISK_FORMAT: (default "qcow2") Type of disk format (qcow2 support snapshot), check [here](https://en.wikibooks.org/wiki/QEMU/Images) for more details.
 * DISK_CACHE: (Default "none") Type of QEMU HDD Cache, check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details
 * DISK_PATH: (Default "/image") Directory path where disk image (and bootloader) will be stored
@@ -100,7 +101,7 @@ The container has extra defined functions which allow you to manipulate the runn
 
 Example:
 ```bash
-$ docker exec -ti $( docker container ls -f 'ancestor=uxora-com/xpenology' -f "status=running" -q ) /bin/vm-snap-create
+$ docker exec -ti $( docker container ls -f 'ancestor=uxora-com/xpenology' -f "status=running" -q ) vm-snap-create
 ```
 
 
@@ -129,8 +130,8 @@ $ sudo insmod /volume1/homes/admin/9pnet.ko
 $ sudo insmod /volume1/homes/admin/9pnet_virtio.ko
 $ sudo insmod /volume1/homes/admin/9p.ko
 
-#Create a new share folder (ie. datashare)
-#Then mount 9p hostdata to this folder
+#Create a new share folder in DSM (ie. datashare)
+#Then mount 9p hostdata to this folder in ssh terminal on xpenology vm
 $ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata /volume1/datashare
 ```
 
