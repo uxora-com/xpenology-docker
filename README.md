@@ -7,6 +7,11 @@ So technicaly it can run any bootloader you provide.
 
 The project is based on [segator/xpenology-docker](https://github.com/segator/xpenology-docker) project which is based on [BBVA/kvm](https://github.com/BBVA/kvm) project.
 
+TESTING STATUS with [this bootloader](https://srv-file12.gofile.io/downloadStore/srv-store2/bym4Cc/synoboot_103b_ds3615xs_virtio_9p.img) :
+- DSM 6.2.3 is working with jun's loader 1.03b for ds3615xs with virtio drivers
+- Live snapshot seems to be working ok
+- 9p mount is working ok
+
 ## Repositories
 
 Source code : https://github.com/uxora-com/xpenology-docker
