@@ -139,7 +139,7 @@ if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]]; then
 else
 	# Use bootloader as first sata disk
 	KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},if=none,id=drive-sata-disk-bootloader,format=${BOOTLOADER_FULLPATH##*.},cache=none,aio=native,detect-zeroes=on'"
-	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ide-hd,bus=ahci0.0,drive=drive-sata-disk-bootloader,id=sata-disk-bootloader,bootindex=100,removable=on'"
+	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ide-hd,bus=ahci0.0,drive=drive-sata-disk-bootloader,id=sata-disk-bootloader,bootindex=100'"
 fi
 
 # Add SATA disks
