@@ -21,13 +21,16 @@ set -e
 : ${DISK_CACHE:='none'}
 : ${DISK_PATH:='/image'}
 
-: ${BOOTLOADER_URL:='http://host/path/bootloader.img'}
-: ${BOOTLOADER_AS_USB:='Y'}
+: ${VM_IP:="20.20.20.21"}
+: ${VM_MAC:="00:11:32:2C:A7:85"}
 
 : ${VM_ENABLE_VIRTIO:="Y"}
 : ${VM_ENABLE_9P:="Y"}
 : ${VM_ENABLE_VGA:="N"}
 : ${VM_CUSTOM_OPTS:=''}
+
+: ${BOOTLOADER_URL:='http://host/path/bootloader.img'}
+: ${BOOTLOADER_AS_USB:='Y'}
 
 : ${DEBUG:='Y'}
 
