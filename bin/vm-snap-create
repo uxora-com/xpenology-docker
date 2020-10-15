@@ -1,9 +1,14 @@
 #!/bin/bash
 
+: ${DISK_FORMAT:='qcow2'}
 : ${DISK_PATH:='/image'}
 : ${BOOTLOADER_AS_USB:='Y'}
 
-BOOTLOADER_FULLPATH="${DISK_PATH%/}/bootloader.raw"
+[[ ! "${BOOTLOADER_AS_USB}" == [Yy1]* ]] && [[ ! "${DISK_FORMAT}" == "qcow2" ]] \
+	&& echo "ERROR: Unsupported disk format: ${DISK_FORMAT} (only qcow2 support live snapshot)" \
+	&& exit 254
+
+BOOTLOADER_FULLPATH="${DISK_PATH%/}/bootloader.${DISK_FORMAT}"
 DEV_TYPE="sata"
 rc=0
 
@@ -12,41 +17,38 @@ rc=0
 echo "#      Creating live snapshot      #"
 echo "# ################################ #"
 
-echo ""
-echo "#### INFO: Ejecting bootloader ${DEV_TYPE} disk ..."
-[[ "${DEV_TYPE}" == "usb" ]] \
-	&& echo "eject drive-${DEV_TYPE}-disk-bootloader" | nc -U /run/qemu-monitor.sock \
-	|| echo "drive_del drive-${DEV_TYPE}-disk-bootloader" | nc -U /run/qemu-monitor.sock
-echo ""
 
-echo "info block" | nc -U /run/qemu-monitor.sock | grep -q "${BOOTLOADER_FULLPATH}"
-rc=$?
-[[ $rc -ne 0 ]] \
-	&& echo "## INFO: Bootloader ${DEV_TYPE} disk has been ejected successfully." \
-	|| ( echo "## ERROR: Bootloader ${DEV_TYPE} disk has NOT been ejected. Make sure it's not in use!" && exit 1 )
-echo ""
+if [[ "${DEV_TYPE}" == "usb" ]]; then
+	echo ""
+	echo "#### INFO: Ejecting bootloader ${DEV_TYPE} disk ..."
+	cat <<- __EOF__ | nc -U /run/qemu-monitor.sock | grep -q "${BOOTLOADER_FULLPATH}"
+		eject -f drive-disk-bootloader
+		info block
+	__EOF__
+	rc=$?
+	echo ""
+	[[ $rc -ne 0 ]] \
+		&& echo "## INFO: Bootloader ${DEV_TYPE} disk has been ejected successfully." \
+		|| ( echo "## ERROR: Bootloader ${DEV_TYPE} disk has NOT been ejected. Make sure it's not in use!" && exit 2 )
+	echo ""
+	
+fi
 
 echo ""
 echo "#### INFO: Saving vm ..."
 echo savevm $1 | nc -U /run/qemu-monitor.sock
 echo "" 
 
-echo ""
-echo "#### INFO: Reinserting bootloader ${DEV_TYPE} disk ..."
 if [[ "${DEV_TYPE}" == "usb" ]]; then
-	echo "change drive-${DEV_TYPE}-disk-bootloader ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH##*.}" | nc -U /run/qemu-monitor.sock
-else
-	cat <<- __EOF__ | nc -U /run/qemu-monitor.sock
-		drive_add 0 "file=${BOOTLOADER_FULLPATH},if=none,id=drive-${DEV_TYPE}-disk-bootloader,format=${BOOTLOADER_FULLPATH##*.},cache=none,aio=native,detect-zeroes=on"
-		device_add "ide-hd,bus=ahci0.0,drive=drive-${DEV_TYPE}-disk-bootloader,id=sata-disk-bootloader,bootindex=100"
+	echo ""
+	echo "#### INFO: Reinserting bootloader ${DEV_TYPE} disk ..."
+	cat <<- __EOF__ | nc -U /run/qemu-monitor.sock | grep -q "drive-disk-bootloader.*${BOOTLOADER_FULLPATH}"
+		change drive-disk-bootloader ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH##*.}
+		info block
 	__EOF__
+	echo ""
+	rc=$?
+	[[ $rc -eq 0 ]] && echo "## INFO: Bootloader ${DEV_TYPE} disk has been reinserted successfully..." \
+		|| ( echo "## WARNING: Bootloader ${DEV_TYPE} disk has NOT been reinserted. You may have boot issue on reset." && exit $rc )
+	echo ""
 fi
-echo ""
-
-echo "info block" | nc -U /run/qemu-monitor.sock | grep -q "drive-${DEV_TYPE}-disk-bootloader.*${BOOTLOADER_FULLPATH}"
-rc=$?
-[[ $rc -eq 0 ]] && echo "## INFO: Bootloader ${DEV_TYPE} disk has been reinserted successfully..." \
-	|| ( echo "## WARNING: Bootloader ${DEV_TYPE} disk has NOT been reinserted. You may have boot issue on reset." && exit $rc )
-echo ""
-
-exit $rc
