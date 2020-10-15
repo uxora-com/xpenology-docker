@@ -7,10 +7,19 @@ So technicaly it can run any bootloader you provide.
 
 The project is based on [segator/xpenology-docker](https://github.com/segator/xpenology-docker) project which is based on [BBVA/kvm](https://github.com/BBVA/kvm) project.
 
-- TESTING STATUS with [this bootloader](https://gofile.io/d/bym4Cc) ( * url hint * ):
-	- DSM 6.2.3 is working with jun's loader 1.03b for ds3615xs with virtio drivers
-	- Live snapshot seems to be working ok
-	- 9p mount is working ok
+## Testing staus
+Personnal testing has been done with [this bootloader](https://gofile.io/d/bym4Cc), this is a ds3615xs jun's loader 1.03b with virtio drivers.
+
+( * Note: the download link inside this [url](https://gofile.io/d/bym4Cc) can be used as BOOTLOADER_URL * ).
+
+Linux (Debian) docker:
+- dsm 6.2.3 is working ok so far
+- Live snapshot seems to be working ok
+- 9p mount is working ok
+
+Windows 10 docker:
+- dsm 6.2.3 works but very slow for loading bootloader
+- Live snapshot and 9p has not been tested
 
 ## Repositories
 
