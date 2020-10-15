@@ -122,32 +122,37 @@ if [[ ! -f ${BOOTLOADER_FULLPATH} ]] ; then
 		|| ( log "ERROR" "Bootloader cannot be downloaded from URL." && exit 10 )
 fi
 
-# Changed bootloader size checking from error to warning
+# Check bootloader file size, and throw a warning only
 find ${DISK_PATH} -name ${BOOTLOADER_FULLPATH##*/} -size +48M -size -52M | grep -q . \
 	&& log "INFO" "${BOOTLOADER_FULLPATH} file size seems valid for synoboot." \
 	|| ( log "WARNING" "${BOOTLOADER_FULLPATH} file size does not seem correct for synoboot." )
 
-# Convert bootloader to other format (qcow2 for now)
-#[[ ${DISK_FORMAT} == "qcow2" ]] \
-#	&& qemu-img convert -f raw -O ${DISK_FORMAT} ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT} \
-#	&& log "INFO" "Bootloader has been converted to ${DISK_FORMAT}" \
-#	&& BOOTLOADER_FULLPATH=${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}
+# Convert bootloader to other format (only qcow2 for now)
+if [[ ${DISK_FORMAT} == "qcow2" ]]; then
+	if [[ ! -f ${BOOTLOADER_FULLPATH%.raw}.${DISK_FORMAT} ]]; then
+		qemu-img convert -f raw -O ${DISK_FORMAT} ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH%.raw}.${DISK_FORMAT} \
+			&& log "INFO" "Bootloader has been converted to ${DISK_FORMAT}" \
+			|| ( log "ERROR" "Cannot convert Bootloader to ${DISK_FORMAT}. Exiting." && exit 20 )
+	fi
+	BOOTLOADER_FULLPATH=${BOOTLOADER_FULLPATH%.raw}.${DISK_FORMAT}
+fi
 
 # Set bootloader as USB or as SATA disk
 # ######################################
-KVM_SYNOBOOT="-device 'ahci,id=ahci0,multifunction=on,bus=pcie.0,addr=0x7'"
+KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ahci,id=ahci0,multifunction=on,bus=pcie.0,addr=0x7'"
+KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ich9-usb-ehci1,id=usb-bus0,multifunction=on'"
+KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-disk-bootloader,cache=none,aio=native,detect-zeroes=on'"
 
 if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]]; then
-	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ich9-usb-ehci1,id=usb-hub0,multifunction=on' -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-usb-disk-bootloader,cache=writeback' -device 'usb-storage,bus=usb-hub0.0,port=1,drive=drive-usb-disk-bootloader,id=usb-disk-bootloader,bootindex=100,removable=on'"
+	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'usb-storage,bus=usb-bus0.0,port=1,drive=drive-disk-bootloader,id=usb-disk-bootloader,bootindex=100,removable=on'"
 else
 	# Use bootloader as first sata disk
-	KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},if=none,id=drive-sata-disk-bootloader,format=${BOOTLOADER_FULLPATH##*.},cache=none,aio=native,detect-zeroes=on'"
 	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ide-hd,bus=ahci0.0,drive=drive-sata-disk-bootloader,id=sata-disk-bootloader,bootindex=100'"
 fi
 
 # Add SATA disks
 # ######################################
-TMP_KVM_BLK_OPTS=""
+TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS}"
 i=0
 for size in $DISK_SIZE ; do
 	((++i))
