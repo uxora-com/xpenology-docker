@@ -118,7 +118,7 @@ done
 if [[ ! -f ${BOOTLOADER_FULLPATH} ]] ; then
 	log "INFO" "Start downloading bootloader from URL ..."
 	wget --no-check-certificate -q --show-progress --progress=dot:giga ${BOOTLOADER_URL} -O ${BOOTLOADER_FULLPATH} \
-		&& log "INFO" "Bootloader has been successfully downloaded from URL." \
+		&& echo "" && log "INFO" "Bootloader has been successfully downloaded from URL." \
 		|| ( log "ERROR" "Bootloader cannot be downloaded from URL." && exit 10 )
 fi
 
@@ -147,7 +147,7 @@ if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]]; then
 	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'usb-storage,bus=usb-bus0.0,port=1,drive=drive-disk-bootloader,id=usb-disk-bootloader,bootindex=100,removable=on'"
 else
 	# Use bootloader as first sata disk
-	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ide-hd,bus=ahci0.0,drive=drive-sata-disk-bootloader,id=sata-disk-bootloader,bootindex=100'"
+	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ide-hd,bus=ahci0.0,drive=drive-disk-bootloader,id=sata-disk-bootloader,bootindex=100'"
 fi
 
 # Add SATA disks
