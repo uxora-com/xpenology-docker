@@ -140,7 +140,7 @@ fi
 # Set bootloader as USB or as SATA disk
 # ######################################
 KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ahci,id=ahci0,multifunction=on,bus=pcie.0,addr=0x7'"
-KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ich9-usb-ehci1,id=usb-bus0,multifunction=on'"
+KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'nec-usb-xhci,id=usb-bus0,multifunction=on'"
 KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-disk-bootloader,cache=none,aio=native,detect-zeroes=on'"
 
 if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]]; then
