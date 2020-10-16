@@ -159,10 +159,12 @@ $ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata /volum
 ```
 
 
-### Build
+### Build docker image
 
 ```bash
-$ docker build -t uxora-com/xpenology .
+$ git clone https://github.com/uxora-com/xpenology-docker.git
+$ cd xpenology-docker
+$ docker build -t uxora/xpenology .
 ```
 
 ## TroubleShooting
@@ -194,6 +196,22 @@ If this happen to you simple reboot the container
 ```bash
 $ chmod o+rw /dev/kvm
 $ chmod o+rw /dev/net/tun
+```
+* If you have fuse issue
+```bash
+$ modprobe fuse
+# or # $ apt-get reinstall fuse
+```
+
+* if iptables issue with msg like:
+```
+	iptables v1.6.0: can't initialize iptables table `nat': Table does not exist (do you need to insmod?)
+	Perhaps iptables or your kernel needs to be upgraded.
+```
+
+Try to reload ip_tables module
+```bash
+$ modprobe ip_tables
 ```
 
 ## License
