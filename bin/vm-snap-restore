@@ -9,10 +9,12 @@
 : ${DISK_PATH:='/image'}
 : ${BOOTLOADER_AS_USB:='Y'}
 
-[[ ! "${BOOTLOADER_AS_USB}" == [Yy1]* ]] && [[ ! "${DISK_FORMAT}" == "qcow2" ]] \
+[[ ! "${DISK_FORMAT}" == "qcow2" ]] \
 	&& echo "ERROR: Unsupported disk format: ${DISK_FORMAT} (only qcow2 support live snapshot)" \
 	&& exit 254
 
+# Remove parts of USB disk ejection
+: <<'__BLOCKCOMMENT__'
 BOOTLOADER_FULLPATH="${DISK_PATH%/}/bootloader.${DISK_FORMAT}"
 DEV_TYPE="sata"
 rc=0
@@ -38,12 +40,15 @@ if [[ "${DEV_TYPE}" == "usb" ]]; then
 	echo ""
 	
 fi
+__BLOCKCOMMENT__
 
 echo ""
 echo "#### INFO: Loading vm ..."
 echo loadvm $1 | nc -U /run/qemu-monitor.sock
 echo "" 
 
+# Remove parts of USB disk ejection
+: <<'__BLOCKCOMMENT__'
 if [[ "${DEV_TYPE}" == "usb" ]]; then
 	echo ""
 	echo "#### INFO: Reinserting bootloader ${DEV_TYPE} disk ..."
@@ -57,3 +62,4 @@ if [[ "${DEV_TYPE}" == "usb" ]]; then
 		|| ( echo "## WARNING: Bootloader ${DEV_TYPE} disk has NOT been reinserted. You may have boot issue on reset." && exit $rc )
 	echo ""
 fi
+__BLOCKCOMMENT__
