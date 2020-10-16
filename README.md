@@ -7,25 +7,35 @@ So technicaly it can run any bootloader you provide.
 
 The project is based on [segator/xpenology-docker](https://github.com/segator/xpenology-docker) project which is based on [BBVA/kvm](https://github.com/BBVA/kvm) project.
 
-## Testing staus
-Personnal testing has been done with [this bootloader](https://gofile.io/d/bym4Cc), this is a ds3615xs jun's loader 1.03b with virtio drivers.
-
-( * Note: the download link inside this [url](https://gofile.io/d/bym4Cc) can be used as BOOTLOADER_URL * ).
-
-Linux (Debian) docker:
-- dsm 6.2.3 is working ok so far
-- Live snapshot seems to be working ok
-- 9p mount is working ok
-
-Windows 10 docker:
-- dsm 6.2.3 works but very slow for loading bootloader
-- Live snapshot and 9p has not been tested
-
 ## Repositories
 
 Source code : https://github.com/uxora-com/xpenology-docker
 
 Docker image: https://hub.docker.com/r/uxora/xpenology
+
+## Testing Notes
+Personnal testing has been done with [this bootloader](https://gofile.io/d/bym4Cc), this is a ds3615xs jun's loader 1.03b with virtio drivers.
+
+( * Note: the download link inside this [url](https://gofile.io/d/bym4Cc) can be used as BOOTLOADER_URL * ).
+
+- Proxmox Lxc (OK):
+	- Cpu AMD
+	- Proxmox 6.2-11 Kernel 5.4.60-1-pve
+	- Template lxc "debian-10-standard_10.5-1_amd64"
+	- dsm 6.2.3 OK, Live snapshot OK, 9p mount OK
+
+- MxLinux live usb (OK):
+	- Cpu Intel i7
+	- Linux Debian 4.19.0-9-amd64
+	- dsm 6.2.3 OK, Live snapshot OK, 9p mount OK
+
+- Windows 10 docker (OK but Slow):
+	- Intel i7 cpu
+	- dsm 6.2.3 OK but very slow for loading bootloader, Snapshot and 9p not tested
+
+- Proxmox VM Linux Debian 10 (NOT working):
+	- Nested virtualization all set and validated with virt-host-validate
+	- After grub boot menu, it's black screen or sometime mount error
 
 ## Features
 
