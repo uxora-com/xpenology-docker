@@ -127,7 +127,7 @@ The container has extra defined functions which allow you to manipulate the runn
 
 Example:
 ```bash
-$ docker exec -ti $( docker container ls -f 'ancestor=uxora-com/xpenology' -f "status=running" -q ) vm-snap-create
+$ docker exec -ti $( docker container ls -f 'ancestor=uxora/xpenology' -f "status=running" -q ) vm-snap-create
 ```
 
 
