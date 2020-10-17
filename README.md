@@ -36,6 +36,9 @@ Personnal testing has been done with [this bootloader](https://gofile.io/d/bym4C
 - Proxmox VM Linux Debian 10 (NOT working):
 	- Nested virtualization all set and validated with virt-host-validate
 	- After grub boot menu, it's black screen or sometime mount error
+	- I don't know why it doesn't work, any idea?
+
+If you have any issue, please raise it in "issues" area.
 
 ## Features
 
