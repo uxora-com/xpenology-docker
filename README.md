@@ -14,9 +14,7 @@ Source code : https://github.com/uxora-com/xpenology-docker
 Docker image: https://hub.docker.com/r/uxora/xpenology
 
 ## Testing Notes
-Personnal testing has been done with [this bootloader](https://gofile.io/d/bym4Cc), this is a ds3615xs jun's loader 1.03b with virtio drivers.
-
-( * Note: the download link inside this [url](https://gofile.io/d/bym4Cc) can be used as BOOTLOADER_URL * ).
+Personnal testing has been done with ds3615xs jun's loader 1.03b with virtio drivers.
 
 - Proxmox Lxc (OK):
 	- Cpu AMD
