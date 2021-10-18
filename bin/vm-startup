@@ -229,7 +229,11 @@ KVM_NET_OPTS="-netdev tap,ifname=vm-nat,script=no,downscript=no,id=hostnet0"
 
 
 # Hack for guest VMs complaining about "bad udp checksums in 5 packets"
-iptables -A POSTROUTING -t mangle -p udp --dport bootpc -j CHECKSUM --checksum-fill
+log "INFO" "Hack for guest VMs complaining about: bad udp checksums in 5 packets"
+apt install -y ethtool
+iptables -A POSTROUTING -t mangle -p udp --dport bootpc -j CHECKSUM --checksum-fill \
+        || ( log "WARNING" "Iptables hack for checksum FAILED" && ethtool -K eth0 tx off || true )
+
 
 # Build DNS options from container /etc/resolv.conf
 nameservers=($(grep '^nameserver' /etc/resolv.conf | sed 's/nameserver //'))
