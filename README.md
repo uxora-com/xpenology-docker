@@ -82,6 +82,7 @@ $ docker run --privileged --cap-add=NET_ADMIN \
 	uxora/xpenology
 ```
 
+Note: After successfully running this container, you will be able to access the DSM WebUI with docker host ip and port 5000 (ie. 192.168.1.25:5000).
 
 ## Variables
 
