@@ -7,11 +7,13 @@ So technicaly it can run any bootloader you provide.
 
 The project is based on [segator/xpenology-docker](https://github.com/segator/xpenology-docker) project which is based on [BBVA/kvm](https://github.com/BBVA/kvm) project.
 
-## Repositories
+## Repositories/Tutorial
 
 Source code : https://github.com/uxora-com/xpenology-docker
 
 Docker image: https://hub.docker.com/r/uxora/xpenology
+
+Tutorial: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
 
 ## Testing Notes
 Personnal testing has been done with ds3615xs jun's loader 1.03b with virtio drivers.
@@ -74,15 +76,19 @@ $ docker run --privileged --cap-add=NET_ADMIN \
 	-e THREADS=1 \
 	-e RAM=512 \
 	-e DISK_SIZE="8G 16G" \
-	-e DISK_PATH="/image" \
-	-e BOOTLOADER_URL="http://example.com/path/synoboot.img" \
+	-e DISK_PATH="/xpy_syst" \
+	-e BOOTLOADER_URL="http://192.168.0.14/joomla/tmp/synoboot.img" \
 	-e BOOTLOADER_AS_USB="Y" \
 	-e VM_ENABLE_VIRTIO="Y" \
-	-v /shared/data:/datashare \
+	-e VM_PATH_9P="/xpy_data /xpy_syst" \
+	-v /xpenodock/data:/xpy_data \
+	-v /xpenodock/syst:/xpy_syst \
 	uxora/xpenology
 ```
 
-Note: After successfully running this container, you will be able to access the DSM WebUI with docker host ip and port 5000 (ie. 192.168.1.25:5000).
+Note0: For full disk passtrough, check tutorial here: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
+Note1: If you do not want to use BOOTLOADER_URL, but local copy, then check the tutorial.
+Note2: After successfully running this container, you will be able to access the DSM WebUI with docker HOST_IP and port 5000 (ie. 192.168.1.25:5000).
 
 ## Variables
 
@@ -95,6 +101,7 @@ Multiples environment variables can be modified to alter default runtime.
 * DISK_SIZE:(Default "16") Size of virtual disk in GB
 	* Set DISK_SIZE=0, if you don't want to have a virtual disk
 	* Set more values separated by space, to have more virtual disk (ie. DISK_SIZE="8 16")
+	* It is now possible to pass the full disk device  (ie. DISK_SIZE="8G /dev/sdc")
 
 * DISK_FORMAT: (default "qcow2") Type of disk format (qcow2 support snapshot), check [here](https://en.wikibooks.org/wiki/QEMU/Images) for more details.
 * DISK_CACHE: (Default "none") Type of QEMU HDD Cache, check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details
@@ -109,7 +116,10 @@ Multiples environment variables can be modified to alter default runtime.
 * VM_ENABLE_VGA: (Default "No") Enabling qxl vga and vnc. Not needed for Xpenology.
 * VM_ENABLE_VIRTIO: (Default "Yes") Enabling virtio drivers. Make sure that synoboot has virtio drivers.
 * VM_ENABLE_9P: (Default "Yes") Enabling virtio 9p mount point. Need VM_ENABLE_VIRTIO enabled.
-* VM_PATH_9P: (Default "/datashare") Directory path of 9p mount point to be shared with xpenology. (Usually combined with -v docker option)
+* VM_PATH_9P: (Default "/datashare") Directories path of 9p mount point to be shared with xpenology
+	* Need VM_ENABLE_9P enabled and -v docker option (ie. -v /xpenodock/data:/xpy_data)
+	* Can set multiple values separated by space (ie. -e VM_PATH_9P="/xpy_data /xpy_syst")
+	* For each value, it will be associated to 9p mount point tag "hostdata0", "hostdata1", ...
 * VM_CUSTOM_OPTS: (Default "") Additionnal custom option to add to the launcher qemu command line
 
 * VM_TIMEOUT_POWERDOWN: (Default "10") Timeout for vm-powerdown command
@@ -155,9 +165,9 @@ $ sudo insmod /volume1/homes/admin/9pnet.ko
 $ sudo insmod /volume1/homes/admin/9pnet_virtio.ko
 $ sudo insmod /volume1/homes/admin/9p.ko
 
-#Create a new share folder in DSM (ie. datashare)
+#Create a "new share folder" in File Staion from DSM gui (ie. datashare)
 #Then mount 9p hostdata to this folder in ssh terminal on xpenology vm
-$ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata /volume1/datashare
+$ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata0 /volume1/datashare
 ```
 
 
