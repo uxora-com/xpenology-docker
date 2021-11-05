@@ -8,7 +8,7 @@ ENV CORES "1"
 ENV RAM "512"
 
 #Bootloader
-ENV BOOTLOADER_URL ""
+ENV BOOTLOADER_URL "https://beta.karma.com.de/synoboot.img"
 ENV BOOTLOADER_AS_USB "Y"
 
 #Disk
@@ -66,11 +66,6 @@ RUN chmod -R +x /build_stage/vm-* \
 
 EXPOSE 5000
 EXPOSE 5001
-EXPOSE 139
-EXPOSE 445
-EXPOSE 111
-EXPOSE 892
-EXPOSE 2049
 
 VOLUME $VM_PATH_9P
 
