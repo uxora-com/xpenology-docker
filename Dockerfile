@@ -8,7 +8,7 @@ ENV CORES "1"
 ENV RAM "512"
 
 #Bootloader
-ENV BOOTLOADER_URL ""
+ENV BOOTLOADER_URL "https://store2.gofile.io/download/7826b74f-95f4-47fc-ad99-d21cd52f8649/synoboot_103b_ds3615xs_virtio_9p.img"
 ENV BOOTLOADER_AS_USB "Y"
 
 #Disk
