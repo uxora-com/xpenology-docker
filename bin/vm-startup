@@ -127,10 +127,10 @@ done
 #[[ "${BOOTLOADER_REPLACE_IFEXISTS}" == [Yy1]* ]] && [[ ! -f ${BOOTLOADER_FULLPATH} ]] \
 #	&& mv ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH}.old \
 #	&& log "INFO" "Old synoboot has been renamed with .old"
-
-if [[ -f ${BOOTLOADER_FULLPATH}.orig ]] ; then
-	log "INFO" "Skip URL download, raw bootloader already exist: ${BOOTLOADER_FULLPATH}.orig ."
-	log "INFO" "${BOOTLOADER_FULLPATH}.orig exists, skipping grub.cfg modification"
+BOOTLOADER_BAK_EXT=".tar.gz"
+if [[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] ; then
+	log "INFO" "Skip URL download, raw bootloader already exist: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ."
+	log "INFO" "${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} exists, skipping grub.cfg modification"
 	flag_bootl_err=1
 elif [[ -f ${BOOTLOADER_FULLPATH} ]] ; then
 	log "INFO" "Skip URL download, raw bootloader already exist: ${BOOTLOADER_FULLPATH} ."
@@ -175,8 +175,8 @@ if [[ $flag_bootl_err -eq 0 ]]; then
 	tmp_bootl_mount_path="/mnt"
 	tmp_bootl_grubcfg_path="${tmp_bootl_mount_path}/grub/grub.cfg"
 
-	log "INFO" "... Backing up bootloader as ${BOOTLOADER_FULLPATH}.orig"
-	cp ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH}.orig
+	log "INFO" "... Backing up bootloader as ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
+	tar -czf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} -C ${BOOTLOADER_FULLPATH%/*} ${BOOTLOADER_FULLPATH##*/} 
 	
 	log "INFO" "Mounting bootloader image 1st partition..."
 	log "DEBUG" "Mount cmd: mount -o loop,offset=$((${tmp_bootl_start}*512)),sizelimit=$((${tmp_bootl_sector}*512)) ${BOOTLOADER_FULLPATH} ${tmp_bootl_mount_path}"
@@ -247,14 +247,14 @@ if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 		log "INFO" "Skip bootloader ${DISK_FORMAT} convertion, because it already exist."
 	fi
 	
-	# delete img bootloader if orig exist
-	[[ -f ${BOOTLOADER_FULLPATH}.orig ]] \
+	# delete img bootloader if bak exist
+	[[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] \
 		&& rm -f ${BOOTLOADER_FULLPATH}
 
 	BOOTLOADER_FULLPATH=${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}
 elif [[ ! -f ${BOOTLOADER_FULLPATH} ]]; then
-	log "INFO" "... copy orig bootloader as ${BOOTLOADER_FULLPATH}"
-	cp ${BOOTLOADER_FULLPATH}.orig ${BOOTLOADER_FULLPATH}
+	log "INFO" "... copy/extract bak to ${BOOTLOADER_FULLPATH}"
+	tar -xzf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} -C ${BOOTLOADER_FULLPATH%/*}
 fi
 
 # Set 1st disk for snapshot
