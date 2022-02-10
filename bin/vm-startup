@@ -34,6 +34,16 @@ set -e
 : ${BOOTLOADER_URL:='http://host/path/bootloader.img'}
 : ${BOOTLOADER_AS_USB:='Y'}
 
+: ${GRUBCFG_VID:='46f4'}
+: ${GRUBCFG_PID:='0001'}
+: ${GRUBCFG_SN:=''}
+: ${GRUBCFG_MAC1:=''}
+: ${GRUBCFG_DISKIDXMAP:=''}
+: ${GRUBCFG_SATAPORTMAP:=''}
+: ${GRUBCFG_DISKIDXMAP:=''}
+
+
+
 : ${DEBUG:='Y'}
 
 
@@ -106,6 +116,7 @@ configureNetworks () {
 # ######################################
 
 BOOTLOADER_FULLPATH="${DISK_PATH%/}/bootloader.img"
+flag_bootl_err=0
 
 for p in ${DISK_PATH} ; do
 	[[ ! -d $p ]] && mkdir -p $p
@@ -117,19 +128,114 @@ done
 #	&& mv ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH}.old \
 #	&& log "INFO" "Old synoboot has been renamed with .old"
 
-if [[ ! -f ${BOOTLOADER_FULLPATH} ]] ; then
+if [[ -f ${BOOTLOADER_FULLPATH}.orig ]] ; then
+	log "INFO" "Skip URL download, raw bootloader already exist: ${BOOTLOADER_FULLPATH}.orig ."
+	log "INFO" "${BOOTLOADER_FULLPATH}.orig exists, skipping grub.cfg modification"
+	flag_bootl_err=1
+elif [[ -f ${BOOTLOADER_FULLPATH} ]] ; then
+	log "INFO" "Skip URL download, raw bootloader already exist: ${BOOTLOADER_FULLPATH} ."
+else
 	log "INFO" "Start downloading bootloader from URL: ${BOOTLOADER_URL} ..."
 	wget --no-check-certificate -q --show-progress --progress=dot:giga ${BOOTLOADER_URL} -O ${BOOTLOADER_FULLPATH} \
 		&& echo "" && log "INFO" "Bootloader has been successfully downloaded from URL." \
 		|| ( log "ERROR" "Bootloader cannot be downloaded from URL." && exit 10 )
-else
-	log "INFO" "Skip URL download, raw bootloader already exist: ${BOOTLOADER_FULLPATH} ."
 fi
 
-# Check bootloader file size, and throw a warning only
-find ${DISK_PATH} -name ${BOOTLOADER_FULLPATH##*/} -size +48M -size -52M | grep -q . \
-	&& log "INFO" "${BOOTLOADER_FULLPATH} file size seems valid for synoboot." \
-	|| ( log "WARNING" "${BOOTLOADER_FULLPATH} file size does not seem correct for synoboot." )
+
+
+
+
+# Check bootloader
+
+# REMOVED because of different bootloader size
+#find ${DISK_PATH} -name ${BOOTLOADER_FULLPATH##*/} -size +48M -size -52M | grep -q . || flag_bootl_err=1
+#
+#[[ $flag_bootl_err -eq 0 ]] \
+#	&& log "INFO" "${BOOTLOADER_FULLPATH} file size seems valid for synoboot." \
+#	|| log "WARNING" "${BOOTLOADER_FULLPATH} file size does not seem correct for synoboot."
+
+
+# Extract bootloader partitions info
+if [[ $flag_bootl_err -eq 0 ]]; then
+
+	tmp_bootl_part1="$( fdisk -l -o Device,Start,Sectors,Type ${BOOTLOADER_FULLPATH} | grep -e .${BOOTLOADER_FULLPATH##*/}1.*2048 )"
+
+	[[ "x${tmp_bootl_part1}" == "x" ]] && flag_bootl_err=2
+
+	[[ $flag_bootl_err -eq 0 ]] \
+        && log "INFO" "${BOOTLOADER_FULLPATH} partitions seems ok." \
+        || log "WARNING" "${BOOTLOADER_FULLPATH} : cannot find disk image partitions"
+fi
+
+# grub.cfg modification
+if [[ $flag_bootl_err -eq 0 ]]; then
+	tmp_bootl_sz="$( fdisk -l ${BOOTLOADER_FULLPATH} | grep ^Sector | cut -d/ -f3 | tr -dc '0-9' )"
+	tmp_bootl_start="$( echo ${tmp_bootl_part1} | cut -d" " -f2 | tr -dc '0-9' )"
+	tmp_bootl_sector="$( echo ${tmp_bootl_part1} | cut -d" " -f3 | tr -dc '0-9' )"
+	tmp_bootl_mount_path="/mnt"
+	tmp_bootl_grubcfg_path="${tmp_bootl_mount_path}/grub/grub.cfg"
+
+	log "INFO" "... Backing up bootloader as ${BOOTLOADER_FULLPATH}.orig"
+	cp ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH}.orig
+	
+	log "INFO" "Mounting bootloader image 1st partition..."
+	log "DEBUG" "Mount cmd: mount -o loop,offset=$((${tmp_bootl_start}*512)),sizelimit=$((${tmp_bootl_sector}*512)) ${BOOTLOADER_FULLPATH} ${tmp_bootl_mount_path}"
+	mount -o loop,offset=$((${tmp_bootl_start}*512)),sizelimit=$((${tmp_bootl_sector}*512)) ${BOOTLOADER_FULLPATH} ${tmp_bootl_mount_path}
+	
+	if [[ -f ${tmp_bootl_grubcfg_path} ]]; then
+		flag_bootl_err=0
+	elif [[ -f "${tmp_bootl_mount_path}/boot/grub/grub.cfg" ]]; then
+		tmp_bootl_grubcfg_path="${tmp_bootl_mount_path}/boot/grub/grub.cfg"
+	else
+		flag_bootl_err=4
+		log "WARNING" "Cannot mount or find grub.cfg, maybe it is not a xpenology bootloader???"
+	fi
+	
+	if [[ $flag_bootl_err -eq 0 ]]; then
+		log "INFO" "... Modifying grub.cfg"
+		
+		[[ "x${GRUBCFG_VID}" != "x" ]] \
+		  && sed -i \
+			-e "s/\(vid=\)\(0x[a-zA-Z0-9]\+\)/\10x${GRUBCFG_VID}/g" \
+			-e "s/\(pid=\)\(0x[a-zA-Z0-9]\+\)/\10x${GRUBCFG_PID}/g" \
+			${tmp_bootl_grubcfg_path} \
+		  && grep "vid=0x${GRUBCFG_VID}" ${tmp_bootl_grubcfg_path} \
+		  && log "DEBUG" "... grub.cfg: vid/pid changed to ${GRUBCFG_VID}/${GRUBCFG_PID}"
+
+		[[ "x${GRUBCFG_SN}" != "x" ]] \
+		  && sed -i -e "s/\(sn=\)\([a-zA-Z0-9]\+\)/\1${GRUBCFG_SN}/g" ${tmp_bootl_grubcfg_path} \
+		  && grep "sn=${GRUBCFG_SN}" ${tmp_bootl_grubcfg_path} \
+		  && log "DEBUG" "... grub.cfg: sn changed to ${GRUBCFG_SN}"
+
+		GRUBCFG_MAC1="$( echo ${VM_MAC} | tr -cd '[:alnum:]' | tr '[:lower:]' '[:upper:]' )"
+		[[ "x${GRUBCFG_MAC1}" != "x" && "x$( grep "mac1=${GRUBCFG_MAC1}" ${tmp_bootl_grubcfg_path} )" = "x" ]] \
+		  && sed -i -e "s/\(mac1=\)\([a-zA-Z0-9]\+\)/\1${GRUBCFG_MAC1}/g" ${tmp_bootl_grubcfg_path} \
+		  && grep "mac1=${GRUBCFG_MAC1}" ${tmp_bootl_grubcfg_path} \
+		  && log "DEBUG" "... grub.cfg: mac1 changed to ${GRUBCFG_MAC1}"
+
+		[[ "x${GRUBCFG_DISKIDXMAP}" != "x" ]] \
+		  && sed -i -e "s/\(DiskIdxMap=\)\([a-zA-Z0-9]\+\)/\1${GRUBCFG_DISKIDXMAP}/g" ${tmp_bootl_grubcfg_path} \
+		  && grep "DiskIdxMap=${GRUBCFG_DISKIDXMAP}" ${tmp_bootl_grubcfg_path} \
+		  && log "DEBUG" "... grub.cfg: DiskIdxMap changed to ${GRUBCFG_DISKIDXMAP}"
+
+		[[ "x${GRUBCFG_SATAPORTMAP}" != "x" ]] \
+		  && sed -i -e "s/\(SataPortMap=\)\([a-zA-Z0-9]\+\)/\1${GRUBCFG_SATAPORTMAP}/g" ${tmp_bootl_grubcfg_path} \
+		  && grep "SataPortMap=${GRUBCFG_SATAPORTMAP}" ${tmp_bootl_grubcfg_path} \
+		  && log "DEBUG" "... grub.cfg: SataPortMap changed to ${GRUBCFG_SATAPORTMAP}"
+
+		[[ "x${GRUBCFG_SASIDXMAP}" != "x" ]] \
+		  && sed -i -e "s/\(SasIdxMap=\)\([a-zA-Z0-9]\+\)/\1${GRUBCFG_SASIDXMAP}/g" ${tmp_bootl_grubcfg_path} \
+		  && grep "SasIdxMap=${GRUBCFG_SASIDXMAP}" ${tmp_bootl_grubcfg_path} \
+		  && log "DEBUG" "... grub.cfg: SasIdxMap changed to ${GRUBCFG_SASIDXMAP}"
+	fi
+	
+	if [[ $flag_bootl_err -eq 0 || $flag_bootl_err -eq 4 ]]; then
+		log "INFO" "... Unmounting bootloader on ${tmp_bootl_mount_path}"
+		umount ${tmp_bootl_mount_path}
+	fi
+fi
+
+
 
 # Convert bootloader to other format (only qcow2 for now)
 if [[ ${DISK_FORMAT} == "qcow2" ]]; then
@@ -140,7 +246,15 @@ if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 	else
 		log "INFO" "Skip bootloader ${DISK_FORMAT} convertion, because it already exist."
 	fi
+	
+	# delete img bootloader if orig exist
+	[[ -f ${BOOTLOADER_FULLPATH}.orig ]] \
+		&& rm -f ${BOOTLOADER_FULLPATH}
+
 	BOOTLOADER_FULLPATH=${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}
+elif [[ ! -f ${BOOTLOADER_FULLPATH} ]]; then
+	log "INFO" "... copy orig bootloader as ${BOOTLOADER_FULLPATH}"
+	cp ${BOOTLOADER_FULLPATH}.orig ${BOOTLOADER_FULLPATH}
 fi
 
 # Set 1st disk for snapshot
