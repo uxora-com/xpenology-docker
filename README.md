@@ -1,9 +1,17 @@
 # Synopsis
 
-KVM VirtualMachine of Xpenology dsm (6.2.3:latest tested) running in a docker container, which can be run directly from docker-hub by specifying a BOOTLOADER_URL.
+KVM VirtualMachine of Xpenology DSM running in a docker container, which can be run directly from docker-hub by specifying a BOOTLOADER_URL.
 
-This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3 with jun's xpenology bootloader.
+This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3/7.0.1 with jun and redpill xpenology bootloader.
 So technicaly it can run any bootloader you provide.
+
+Latest tested (dor DS3615xs):
+- 6.2.3 with Jun's 1.03b
+- 7.0.1 with redpill (working but need more testing)
+
+UPDATE:
+- PID, VID and SN (Serial Number), which can be now set in variable, is now directly changed in bootloader during first boot.
+- Redpill bootloader compatibility
 
 The project is based on [segator/xpenology-docker](https://github.com/segator/xpenology-docker) project which is based on [BBVA/kvm](https://github.com/BBVA/kvm) project.
 
@@ -28,6 +36,7 @@ Personnal testing has been done with ds3615xs jun's loader 1.03b with virtio dri
 	- Cpu Intel i7
 	- Linux Debian 4.19.0-9-amd64
 	- dsm 6.2.3 OK, Live snapshot OK, 9p mount OK
+	- dsm 7.0.1-42218 OK (Redpill bootloader)
 
 - Windows 10 docker (OK but Slow):
 	- Intel i7 cpu
@@ -108,6 +117,7 @@ Multiples environment variables can be modified to alter default runtime.
 * DISK_PATH: (Default "/image") Directory path where disk image (and bootloader) will be stored
 
 * BOOTLOADER_URL: (Default "") URL web link of the bootloader (ie. "http://host/path/bootloader.img")
+	* If "bootloader.img" 
 * BOOTLOADER_AS_USB: (Default "Y") Boot the bootloader as USB or as Disk
 
 * VM_IP: (Default "20.20.20.21") Assigned IP for VM DHCP. Don't need to be changed. 
@@ -124,11 +134,16 @@ Multiples environment variables can be modified to alter default runtime.
 
 * VM_TIMEOUT_POWERDOWN: (Default "10") Timeout for vm-powerdown command
 
+* GRUBCFG_VID: (Default "46f4") VendorID of bootloader disk.
+* GRUBCFG_PID: (Default "0001") ProductID of bootloader disk.
+* GRUBCFG_SN: (Default "") Serial number of DSM.
+
+
 ## Featured Functions
 The container has extra defined functions which allow you to manipulate the running VM:
 - vm-powerdown: This function Shutdown graceful the VM, until VM_TIMEOUT_POWERDOWN variable is reached.
 - vm-reset: Hard Reset the VM (this function doesn't stop the container)
-- vm-snap-create <snapshotName>: Create a Live snapshot with memory (work with qcow2 and bootloader is exclude)
+- vm-snap-create <snapshotName>: Create a Live snapshot with memory (work with DISK_FORMAT=qcow2)
 - vm-snap-delete <snapshotName>: Delete a Live snapshot
 - vm-snap-restore <snapshotName>: stop the VM and restart using the choosed snapshot
 - vm-snap-info: Show all the snapshots
@@ -142,6 +157,14 @@ $ docker exec -ti $( docker container ls -f 'ancestor=uxora/xpenology' -f "statu
 
 ## Notes
 
+### Build docker image
+
+```bash
+$ git clone https://github.com/uxora-com/xpenology-docker.git
+$ cd xpenology-docker
+$ docker build -t uxora/xpenology .
+```
+
 ### Xpenology bootloader
 
 You need xpenology bootloader image with virtio drivers for better compatibility.
@@ -150,13 +173,34 @@ Check [this forum](https://xpenology.com/forum/) for more details about xpenolog
 
 And follow [this tutorial](https://xpenology.club/compile-drivers-xpenology-with-windows-10-and-build-in-bash) if you want to compile drivers for your specific xpenology version.
 
+### Recommended setup (without BOOTLOADER_URL)
+```bash
+# To avoid ip_tables error on docker
+$ modprobe ip_tables
+
+# Create directories structure
+$ mkdir -vp /xpenodock/{data,syst,slnk)
+
+# Copy bootloader
+$ cp synoboot_103b_ds3615xs_virtio_9p.img /xpenodock/syst/bootloader.img
+
+# Run xpenology docker
+$ docker run --privileged --cap-add=NET_ADMIN \
+    --device=/dev/net/tun --device=/dev/kvm \
+    -p 5000:5000 -p 5001:5001 -p 2222:22 -p 8080:80 \
+    -e CPU="qemu64" -e THREADS=1 -e RAM=512 -e DISK_SIZE="16G" \
+    -e BOOTLOADER_AS_USB="Y" -e VM_ENABLE_VIRTIO="Y" \
+    -e DISK_PATH="/xpy_syst" -e VM_PATH_9P="/xpy_data" \
+    -v /xpenodock/syst:/xpy_syst -v /xpenodock/data:/xpy_data \
+    uxora/xpenology
+```
 
 ### Mount Docker Host Volumes to Xpenology
 
 To mount Host Path/Docker Volumes to your Xpenology Image, you need to load 9p drivers in your xpenology image.
 
 After having your image with 9p drivers loaded, you need to create and script that will executed on every boot in your xpenology.
-This script should load the drivers and mount your 9p mountpoint, by default this docker image map the path /datashare to the 9p "hostdata".
+This script should load the drivers and mount your 9p mountpoint, by default this docker image map the path /datashare (or /xpy_data) to the 9p "hostdata0".
 
 Example
 ```bash
@@ -169,16 +213,7 @@ $ sudo insmod /volume1/homes/admin/9p.ko
 #Then mount 9p hostdata to this folder in ssh terminal on xpenology vm
 $ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata0 /volume1/datashare
 ```
-
-
-### Build docker image
-
-```bash
-$ git clone https://github.com/uxora-com/xpenology-docker.git
-$ cd xpenology-docker
-$ docker build -t uxora/xpenology .
-```
-
+	
 ## TroubleShooting
 
 * Privileged mode (`--privileged`) is needed in order for KVM to access to macvtap devices
@@ -226,6 +261,15 @@ Try to reload ip_tables module
 $ modprobe ip_tables
 ```
 
+* If you have corrupt file (13) during dsm installation
+	- Make sure you have set the right GRUBCFG_VID, GRUBCFG_PID and GRUBCFG_SN.
+
+* If you want to change bootloader (or reload bootloader with different vid, pid and sn); In the folder where is stored bootloader (./syst):
+	- Delete "bootloader.qcow2" or "bootloader.img"
+	- Rename "bootloader.img.orig" to "bootloader.img"
+	- Restart docker with new parameters
+	
+	
 ## License
 Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file to you under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 
