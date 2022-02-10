@@ -184,12 +184,13 @@ $ mkdir -vp /xpenodock/{data,syst,slnk)
 # Copy bootloader
 $ cp synoboot_103b_ds3615xs_virtio_9p.img /xpenodock/syst/bootloader.img
 
-# Run xpenology docker
+# Run xpenology docker (fake SN: need to change)
 $ docker run --privileged --cap-add=NET_ADMIN \
     --device=/dev/net/tun --device=/dev/kvm \
     -p 5000:5000 -p 5001:5001 -p 2222:22 -p 8080:80 \
     -e CPU="qemu64" -e THREADS=1 -e RAM=512 -e DISK_SIZE="16G" \
     -e BOOTLOADER_AS_USB="Y" -e VM_ENABLE_VIRTIO="Y" \
+    -e GRUBCFG_SN="1234ABC012345" \
     -e DISK_PATH="/xpy_syst" -e VM_PATH_9P="/xpy_data" \
     -v /xpenodock/syst:/xpy_syst -v /xpenodock/data:/xpy_data \
     uxora/xpenology
