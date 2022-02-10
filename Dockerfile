@@ -18,8 +18,8 @@ ENV DISK_CACHE "none"
 ENV DISK_PATH "/image"
 
 #Network
-# # (Dont need to change IP coz all is port forwarded) 
-# # (MAC should correspond to MAC bootloader)
+# # (VM_IP: Dont need to change coz all is port forwarded) 
+# # (VM_MAC: Correspond to MAC bootloader, so it will be set to GRUBCFG_MAC1 aswell)
 ENV VM_IP 20.20.20.21
 ENV VM_MAC "00:11:32:2C:A7:85"
 
@@ -32,6 +32,14 @@ ENV VM_CUSTOM_OPTS ""
 
 ENV VM_TIMEOUT_POWERDOWN "10"
 
+#GRUB CFG
+ENV GRUBCFG_VID "46f4"
+ENV GRUBCFG_PID "0001"
+ENV GRUBCFG_SN ""
+ENV GRUBCFG_DISKIDXMAP ""
+ENV GRUBCFG_SATAPORTMAP ""
+ENV GRUBCFG_DISKIDXMAP ""
+# GRUBCFG_MAC1 will be automacticaly set to VM_MAC value
 
 # Removed apt-get coz we use segator/qemu-kvm image
 #ARG DEBIAN_FRONTEND=noninteractive
