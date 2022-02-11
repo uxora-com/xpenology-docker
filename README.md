@@ -15,6 +15,14 @@ UPDATE:
 
 The project is based on [segator/xpenology-docker](https://github.com/segator/xpenology-docker) project which is based on [BBVA/kvm](https://github.com/BBVA/kvm) project.
 
+## Warning
+
+This system is for testing or educational purpose ONLY, and It is NOT recommended for using in production environment because it has no support and it has not been proven  stable/reliable.
+
+So if DATA LOSS happens by using this system, this is ONLY on your own responsibility.
+
+If you are happy with the testing of this product, I would highly recommend you to go for an original Synology hardware especially for PRODUCTION environment where data is critical.
+
 ## Repositories/Tutorial
 
 Source code : https://github.com/uxora-com/xpenology-docker
