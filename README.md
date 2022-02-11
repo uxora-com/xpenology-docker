@@ -23,6 +23,8 @@ Docker image: https://hub.docker.com/r/uxora/xpenology
 
 Tutorial: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
 
+Compile Redpill bootloader: https://github.com/uxora-com/rpext
+
 ## Testing Notes
 Personnal testing has been done with ds3615xs jun's loader 1.03b with virtio drivers.
 
@@ -96,7 +98,9 @@ $ docker run --privileged --cap-add=NET_ADMIN \
 ```
 
 Note0: For full disk passtrough, check tutorial here: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
+
 Note1: If you do not want to use BOOTLOADER_URL, but local copy, then check the tutorial.
+
 Note2: After successfully running this container, you will be able to access the DSM WebUI with docker HOST_IP and port 5000 (ie. 192.168.1.25:5000).
 
 ## Variables
