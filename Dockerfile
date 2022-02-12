@@ -1,4 +1,4 @@
-FROM segator/qemu-kvm
+FROM uxora/debian-kvm
 LABEL maintainer="Michel VONGVILAY <https://www.uxora.com/about/me#contact-form>"
 LABEL version="0.1"
 
