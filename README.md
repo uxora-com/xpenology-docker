@@ -191,7 +191,7 @@ And follow [this tutorial](https://xpenology.club/compile-drivers-xpenology-with
 $ modprobe ip_tables
 
 # Create directories structure
-$ mkdir -vp /xpenodock/{data,syst,slnk)
+$ mkdir -vp /xpenodock/{data,syst,slnk}
 
 # Copy bootloader
 $ cp synoboot_103b_ds3615xs_virtio_9p.img /xpenodock/syst/bootloader.img
