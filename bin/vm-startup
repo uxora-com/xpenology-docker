@@ -19,6 +19,8 @@ set -e
 : ${DISK_SIZE:='16'}
 : ${DISK_FORMAT:='qcow2'}
 : ${DISK_CACHE:='none'}
+: ${DISK_OPT_DRV:='cache=writeback,discard=on,aio=threads,detect-zeroes=on'}
+: ${DISK_OPT_DEV:='rotation_rate=1'}
 : ${DISK_PATH:='/image'}
 
 : ${VM_IP:="20.20.20.21"}
@@ -265,14 +267,14 @@ fi
 # ######################################
 i_sata=0
 : ${KVM_PREBOOT:=""}
-KVM_PREBOOT="${KVM_PREBOOT} -device 'ahci,id=ahci0,multifunction=on,bus=pcie.0,addr=0x7'"
+KVM_PREBOOT="${KVM_PREBOOT} -device 'ahci,id=ahci0,multifunction=on,bus=pci.0,addr=0x7'"
 if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 	log "INFO" "Adding snapshot disk ... "
 	fpath_diskname_="${DISK_PATH%/}/vm-disk-snapshot.${DISK_FORMAT}"
 	qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} 8M
-	KVM_PREBOOT="${KVM_PREBOOT} -drive 'file=${fpath_diskname_},if=none,id=drive-disk-snap,format=${DISK_FORMAT},cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
+	KVM_PREBOOT="${KVM_PREBOOT} -drive 'file=${fpath_diskname_},if=none,id=drive-disk-snap,format=${DISK_FORMAT},${DISK_OPT_DRV}'"
 	if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]]; then
-		KVM_PREBOOT="${KVM_PREBOOT} -device 'virtio-blk-pci,drive=drive-disk-snap,id=virtio-disk-snap,bus=pcie.0,addr=0xa'"
+		KVM_PREBOOT="${KVM_PREBOOT} -device 'virtio-blk-pci,drive=drive-disk-snap,id=virtio-disk-snap,bus=pci.0,addr=0xa'"
 	else
 		KVM_PREBOOT="${KVM_PREBOOT} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-snap,id=sata-disk-snap'"
 		((++i_sata))
@@ -283,7 +285,7 @@ fi
 # ######################################
 log "INFO" "Adding bootloader as $([[ ${BOOTLOADER_AS_USB} == [Yy1]* ]] && echo "USB" || echo "SATA") ..."
 KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'nec-usb-xhci,id=usb-bus0,multifunction=on'"
-KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-disk-bootloader,cache=none,aio=native,detect-zeroes=on'"
+KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-disk-bootloader,cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
 
 if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]]; then
 	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'usb-storage,bus=usb-bus0.0,port=1,drive=drive-disk-bootloader,id=usb-disk-bootloader,bootindex=1,removable=on'"
@@ -303,7 +305,7 @@ diskformat_=""
 i_scsi=0
 if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]]; then
  TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -iscsi 'initiator-name=iqn.1993-08.org.debian:01:c9fc21d990e0'"
- TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=scsihw0,bus=pcie.0,addr=0x5'"
+ TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=scsihw0,bus=pci.0,addr=0x5'"
 fi
 
 i=0
@@ -326,12 +328,13 @@ for size in $DISK_SIZE ; do
 	fi
 	
 	if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]]; then
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-scsi${i_scsi},format=${diskformat_},cache=${DISK_CACHE},discard=on,aio=threads,detect-zeroes=unmap'"
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'scsi-hd,bus=scsihw0.0,channel=0,scsi-id=0,lun=${i_scsi},drive=drive-scsi${i_scsi},id=scsi${i_scsi},rotation_rate=1'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-scsi${i_scsi},format=${diskformat_},${DISK_OPT_DRV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'scsi-hd,bus=scsihw0.0,channel=0,scsi-id=0,lun=${i_scsi},drive=drive-scsi${i_scsi},id=scsi${i_scsi},${DISK_OPT_DEV}'"
+		# ,serial=VH000${i_scsi}
 		((++i_scsi))
 	else
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-sata${i_sata},format=${diskformat_},cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-sata${i_sata},id=sata${i_sata}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-sata${i_sata},format=${diskformat_},${DISK_OPT_DRV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-sata${i_sata},id=sata${i_sata},${DISK_OPT_DEV}'"
 		((++i_sata))
 	fi
 done
@@ -341,8 +344,9 @@ done
 # ######################################
 : ${KVM_OPTS:="\
   -machine q35 \
+  -readconfig /qemu_cfg/pve-q35-4.0.cfg \
   -nodefaults \
-  -realtime mlock=off \
+  -overcommit mem-lock=off \
   -msg timestamp=on \
   -chardev pty,id=charserial0 \
   -device isa-serial,chardev=charserial0,id=serial0 \
@@ -351,7 +355,7 @@ done
   -pidfile /run/qemu.pid \
   "}
 
-[[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && KVM_OPTS="${KVM_OPTS} -device 'virtio-balloon-pci,id=balloon0,bus=pcie.0,addr=0x3'"
+[[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && KVM_OPTS="${KVM_OPTS} -device 'virtio-balloon-pci,id=balloon0,bus=pci.0,addr=0x3'"
 
 # Set Qemu CPU and RAM
 # ######################################
@@ -435,7 +439,7 @@ $DNSMASQ $DNSMASQ_OPTS
 # Launching Qemu VM command
 # ######################################
 log "INFO" "Launching qemu-kvm ..."
-COMMAND="$LAUNCHER ${KVM_PREBOOT} $KVM_SYNOBOOT $KVM_BLK_OPTS $KVM_OPTS $KVM_VIDEO_OPTS $KVM_CPU_OPTS $KVM_NET_OPTS $KVM_9P $VM_CUSTOM_OPTS $@"
+COMMAND="$LAUNCHER $KVM_OPTS ${KVM_PREBOOT} $KVM_SYNOBOOT $KVM_BLK_OPTS $KVM_VIDEO_OPTS $KVM_CPU_OPTS $KVM_NET_OPTS $KVM_9P $VM_CUSTOM_OPTS $@"
 log "DEBUG" "${COMMAND}"
 trap '/usr/bin/vm-power-down' SIGTERM
 trap '/usr/bin/vm-power-down' SIGINT
