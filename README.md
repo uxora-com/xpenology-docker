@@ -124,8 +124,10 @@ Multiples environment variables can be modified to alter default runtime.
 	* Set more values separated by space, to have more virtual disk (ie. DISK_SIZE="8 16")
 	* It is now possible to pass the full disk device  (ie. DISK_SIZE="8G /dev/sdc")
 
-* DISK_FORMAT: (default "qcow2") Type of disk format (qcow2 support snapshot), check [here](https://en.wikibooks.org/wiki/QEMU/Images) for more details.
-* DISK_CACHE: (Default "none") Type of QEMU HDD Cache, check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details
+* DISK_FORMAT: (Default "qcow2") Type of disk format (qcow2 support snapshot), check [here](https://en.wikibooks.org/wiki/QEMU/Images) for more details.
+* DISK_CACHE: (DEPRECATED) Replace by DISK_OPT_DRV, check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
+* DISK_OPT_DRV: (Default "cache=writeback,discard=on,aio=threads,detect-zeroes=on") Additional option for disk drive. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
+* DISK_OPT_DEV: (Default "rotation_rate=1") Additional option for disk device. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
 * DISK_PATH: (Default "/image") Directory path where disk image (and bootloader) will be stored
 
 * BOOTLOADER_URL: (Default "") URL web link of the bootloader (ie. "http://host/path/bootloader.img")
