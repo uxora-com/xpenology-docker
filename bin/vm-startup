@@ -180,7 +180,9 @@ if [[ $flag_bootl_err -eq 0 ]]; then
 	
 	log "INFO" "Mounting bootloader image 1st partition..."
 	log "DEBUG" "Mount cmd: mount -o loop,offset=$((${tmp_bootl_start}*512)),sizelimit=$((${tmp_bootl_sector}*512)) ${BOOTLOADER_FULLPATH} ${tmp_bootl_mount_path}"
-	mount -o loop,offset=$((${tmp_bootl_start}*512)),sizelimit=$((${tmp_bootl_sector}*512)) ${BOOTLOADER_FULLPATH} ${tmp_bootl_mount_path}
+	mount -o loop,offset=$((${tmp_bootl_start}*512)),sizelimit=$((${tmp_bootl_sector}*512)) ${BOOTLOADER_FULLPATH} ${tmp_bootl_mount_path} \
+	  && log "INFO" "... successfully mounting ${BOOTLOADER_FULLPATH}" \
+	  || log "WARNING" "... cannot mount ${BOOTLOADER_FULLPATH}"
 	
 	if [[ -f ${tmp_bootl_grubcfg_path} ]]; then
 		flag_bootl_err=0
@@ -188,7 +190,8 @@ if [[ $flag_bootl_err -eq 0 ]]; then
 		tmp_bootl_grubcfg_path="${tmp_bootl_mount_path}/boot/grub/grub.cfg"
 	else
 		flag_bootl_err=4
-		log "WARNING" "Cannot mount or find grub.cfg, maybe it is not a xpenology bootloader???"
+		log "WARNING" "Cannot mount bootloader or find grub.cfg, is this a Xpenology bootloader?"
+		log "WARNING" "Cannot change pid/vid/sn/mac in bootloader, SO MAKE SURE MAC BOOTLOADER matches VM_MAC=${VM_MAC}!!!"
 	fi
 	
 	if [[ $flag_bootl_err -eq 0 ]]; then
@@ -230,8 +233,8 @@ if [[ $flag_bootl_err -eq 0 ]]; then
 	fi
 	
 	if [[ $flag_bootl_err -eq 0 || $flag_bootl_err -eq 4 ]]; then
-		log "INFO" "... Unmounting bootloader on ${tmp_bootl_mount_path}"
-		umount ${tmp_bootl_mount_path}
+		log "INFO" "... Unmounting bootloader on ${tmp_bootl_mount_path} (if mounted)"
+		[[ $( mount | grep -c ${tmp_bootl_mount_path} ) -ne 0 ]] &&  umount ${tmp_bootl_mount_path}
 	fi
 fi
 
@@ -275,11 +278,13 @@ log "INFO" "Adding bootloader as $([[ ${BOOTLOADER_AS_USB} == [Yy1]* ]] && echo 
 KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'nec-usb-xhci,id=usb-bus0,multifunction=on'"
 KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-disk-bootloader,cache=none,aio=native,detect-zeroes=on'"
 
+i_sata=0
 if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]]; then
 	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'usb-storage,bus=usb-bus0.0,port=1,drive=drive-disk-bootloader,id=usb-disk-bootloader,bootindex=1,removable=on'"
 else
 	# Use bootloader as first sata disk
 	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ide-hd,bus=ahci0.0,drive=drive-disk-bootloader,id=sata-disk-bootloader,bootindex=1'"
+	i_sata=1
 fi
 
 # Add SATA disks
@@ -288,16 +293,16 @@ log "INFO" "Adding disk(s)  ..."
 TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS}"
 fpath_diskname_=""
 diskformat_=""
-i=0
+
+i=${i_sata}
 for size in $DISK_SIZE ; do
-	((++i))
 	if [[ $size == "/dev/"* ]] && [[ -e "$size" ]]; then
 		log "INFO" "... adding full device : $size"
 		fpath_diskname_="$size"
 		diskformat_="raw"
 	elif [[ ${size%[Gg]} =~ ^[0-9]+$ ]]; then
 		diskformat_="${DISK_FORMAT}"
-		fpath_diskname_="${DISK_PATH%/}/vm-disk-${i}.${diskformat_}"
+		fpath_diskname_="${DISK_PATH%/}/vm-disk-$((i+1)).${diskformat_}"
 		[[ ! -f ${fpath_diskname_} ]] \
 			&& log "INFO" "... No Initial Disk found, creating disk : ${fpath_diskname_}" \
 			&& qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} ${size%[Gg]}G \
@@ -309,6 +314,7 @@ for size in $DISK_SIZE ; do
 
 	TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-sata${i},format=${diskformat_},cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
 	TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'ide-hd,bus=ahci0.${i},drive=drive-sata${i},id=sata${i}'"
+	((++i))
 done
 : ${KVM_BLK_OPTS:="${TMP_KVM_BLK_OPTS}"}
 
