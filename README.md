@@ -138,8 +138,8 @@ Multiples environment variables can be modified to alter default runtime.
 * VM_MAC: (Default "00:11:32:2C:A7:85") Mac address use for VM DHCP to assigne VM_IP. This need to match MAC set in xpenology grub bootloader. 
 
 * VM_ENABLE_VGA: (Default "No") Enabling qxl vga and vnc. Not needed for Xpenology.
-* VM_ENABLE_VIRTIO: (Default "Yes") Enabling virtio drivers. Make sure that synoboot has virtio drivers.
-* VM_ENABLE_VIRTIO_SCSI: (Default "No") Enabling virtio scsi drivers. Make sure that synoboot has virtio drivers.
+* VM_ENABLE_VIRTIO: (Default "Yes") Enabling virtio disk. Make sure that synoboot has virtio drivers.
+* VM_ENABLE_VIRTIO_SCSI: (Default "No") Enabling virtio scsi disk. Make sure that synoboot has virtio drivers.
 * VM_ENABLE_9P: (Default "Yes") Enabling virtio 9p mount point. Need VM_ENABLE_VIRTIO enabled.
 * VM_PATH_9P: (Default "/datashare") Directories path of 9p mount point to be shared with xpenology
 	* Need VM_ENABLE_9P enabled and -v docker option (ie. -v /xpenodock/data:/xpy_data)
