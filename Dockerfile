@@ -15,8 +15,11 @@ ENV BOOTLOADER_AS_USB "Y"
 #Disk
 ENV DISK_SIZE "16"
 ENV DISK_FORMAT "qcow2"
-ENV DISK_CACHE "none"
+ENV DISK_OPT_DRV "cache=writeback,discard=on,aio=threads,detect-zeroes=on"
+ENV DISK_OPT_DEV "rotation_rate=1"
 ENV DISK_PATH "/image"
+
+# ENV DISK_CACHE "none" # Deprecated replace by DISK_OPT_DRV
 
 #Network
 # # (VM_IP: Dont need to change coz all is port forwarded) 
@@ -52,35 +55,30 @@ ENV GRUBCFG_DISKIDXMAP ""
 #  apt-get autoremove && \
 #  rm -rf /var/lib/apt/lists/*
 
-RUN mkdir /build_stage \
-    && mkdir -p ${DISK_PATH} \
+RUN mkdir /qemu_cfg \
+    && mkdir -p ${DISK_PATH}/cfg \
 	&& mkdir -p $VM_PATH_9P
 
 # Removed bootloader copy, using BOOTLOADER_URL download instead
 # This way it can directly run from docker hub 
 
-#COPY synoboot.im[g] /build_stage/
-#RUN test -f /build_stage/synoboot.img \
-#        || ( wget --no-check-certificate ${BOOTLOADER_URL} -O /build_stage/synoboot.img 2>/dev/nul 1>&2 && echo "INF: Bootloader has been downloaded from URL." ) \
-#        && find /build_stage -name synoboot.img -size +49M -size -51M | grep -q . \
-#        && mv /build_stage/synoboot.img ${DISK_PATH%/}/bootloader.raw \
+#COPY synoboot.im[g] /qemu_cfg/
+#RUN test -f /qemu_cfg/synoboot.img \
+#        || ( wget --no-check-certificate ${BOOTLOADER_URL} -O /qemu_cfg/synoboot.img 2>/dev/nul 1>&2 && echo "INF: Bootloader has been downloaded from URL." ) \
+#        && find /qemu_cfg -name synoboot.img -size +49M -size -51M | grep -q . \
+#        && mv /qemu_cfg/synoboot.img ${DISK_PATH%/}/bootloader.raw \
 #        && echo "INF: Bootloader sucessfully copied to ${DISK_PATH%/}/bootloader.raw" \
 #        || ( echo "ERR: Bootloader not found or invalid!" && exit 255 )
 
-COPY bin /build_stage/
-RUN chmod -R +x /build_stage/vm-* \
-        && mv /build_stage/* /usr/bin/. \
-		&& rm -fr /build_stage \
+COPY cfg /qemu_cfg/
+COPY bin /qemu_cfg/
+RUN chmod -R +x /qemu_cfg/vm-* \
+        && mv /qemu_cfg/vm-* /usr/bin/. \
         && echo "INF: shell scripts have been sucessfully copied to /usr/bin" \
         || ( echo "ERR: Something get wrong with shell scripts!" && exit 255 )
 
 EXPOSE 5000
 EXPOSE 5001
-EXPOSE 139
-EXPOSE 445
-EXPOSE 111
-EXPOSE 892
-EXPOSE 2049
 
 VOLUME $VM_PATH_9P
 
