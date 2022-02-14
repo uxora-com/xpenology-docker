@@ -25,6 +25,7 @@ set -e
 : ${VM_MAC:="00:11:32:2C:A7:85"}
 
 : ${VM_ENABLE_VIRTIO:="Y"}
+: ${VM_ENABLE_VIRTIO_SCSI:="N"}
 : ${VM_ENABLE_9P:="Y"}
 : ${VM_ENABLE_VGA:="N"}
 
@@ -262,14 +263,20 @@ fi
 
 # Set 1st disk for snapshot
 # ######################################
+i_sata=0
 : ${KVM_PREBOOT:=""}
 KVM_PREBOOT="${KVM_PREBOOT} -device 'ahci,id=ahci0,multifunction=on,bus=pcie.0,addr=0x7'"
 if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 	log "INFO" "Adding snapshot disk ... "
-	fpath_diskname_="${DISK_PATH%/}/vm-disk-0-snapshot.${DISK_FORMAT}"
+	fpath_diskname_="${DISK_PATH%/}/vm-disk-snapshot.${DISK_FORMAT}"
 	qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} 8M
-	KVM_PREBOOT="${KVM_PREBOOT} -drive 'file=${fpath_diskname_},if=none,id=drive-virtio0,format=${DISK_FORMAT},cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
-	KVM_PREBOOT="${KVM_PREBOOT} -device 'virtio-blk-pci,drive=drive-virtio0,id=virtio0,bus=pcie.0,addr=0xa'"
+	KVM_PREBOOT="${KVM_PREBOOT} -drive 'file=${fpath_diskname_},if=none,id=drive-disk-snap,format=${DISK_FORMAT},cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
+	if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]]; then
+		KVM_PREBOOT="${KVM_PREBOOT} -device 'virtio-blk-pci,drive=drive-disk-snap,id=virtio-disk-snap,bus=pcie.0,addr=0xa'"
+	else
+		KVM_PREBOOT="${KVM_PREBOOT} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-snap,id=sata-disk-snap'"
+		((++i_sata))
+	fi
 fi
 
 # Set bootloader as USB or as SATA disk
@@ -278,13 +285,12 @@ log "INFO" "Adding bootloader as $([[ ${BOOTLOADER_AS_USB} == [Yy1]* ]] && echo 
 KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'nec-usb-xhci,id=usb-bus0,multifunction=on'"
 KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-disk-bootloader,cache=none,aio=native,detect-zeroes=on'"
 
-i_sata=0
 if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]]; then
 	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'usb-storage,bus=usb-bus0.0,port=1,drive=drive-disk-bootloader,id=usb-disk-bootloader,bootindex=1,removable=on'"
 else
 	# Use bootloader as first sata disk
-	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ide-hd,bus=ahci0.0,drive=drive-disk-bootloader,id=sata-disk-bootloader,bootindex=1'"
-	i_sata=1
+	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-disk-bootloader,id=sata-disk-bootloader,bootindex=1'"
+	((++i_sata))
 fi
 
 # Add SATA disks
@@ -294,7 +300,13 @@ TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS}"
 fpath_diskname_=""
 diskformat_=""
 
-i=${i_sata}
+i_scsi=0
+if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]]; then
+ TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -iscsi 'initiator-name=iqn.1993-08.org.debian:01:c9fc21d990e0'"
+ TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=scsihw0,bus=pcie.0,addr=0x5'"
+fi
+
+i=0
 for size in $DISK_SIZE ; do
 	if [[ $size == "/dev/"* ]] && [[ -e "$size" ]]; then
 		log "INFO" "... adding full device : $size"
@@ -302,19 +314,26 @@ for size in $DISK_SIZE ; do
 		diskformat_="raw"
 	elif [[ ${size%[Gg]} =~ ^[0-9]+$ ]]; then
 		diskformat_="${DISK_FORMAT}"
-		fpath_diskname_="${DISK_PATH%/}/vm-disk-$((i+1)).${diskformat_}"
+		fpath_diskname_="${DISK_PATH%/}/vm-disk-data${i}.${diskformat_}"
 		[[ ! -f ${fpath_diskname_} ]] \
 			&& log "INFO" "... No Initial Disk found, creating disk : ${fpath_diskname_}" \
 			&& qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} ${size%[Gg]}G \
 			|| log "ERROR" "... No Initial Disk found, CANNOT create disk : ${fpath_diskname_}"
+		((++i))
 	else
 		log "WARNING" "... invalid argument : $size"	
 		continue
 	fi
-
-	TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-sata${i},format=${diskformat_},cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
-	TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'ide-hd,bus=ahci0.${i},drive=drive-sata${i},id=sata${i}'"
-	((++i))
+	
+	if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]]; then
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-scsi${i_scsi},format=${diskformat_},cache=${DISK_CACHE},discard=on,aio=threads,detect-zeroes=unmap'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'scsi-hd,bus=scsihw0.0,channel=0,scsi-id=0,lun=${i_scsi},drive=drive-scsi${i_scsi},id=scsi${i_scsi},rotation_rate=1'"
+		((++i_scsi))
+	else
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-sata${i_sata},format=${diskformat_},cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-sata${i_sata},id=sata${i_sata}'"
+		((++i_sata))
+	fi
 done
 : ${KVM_BLK_OPTS:="${TMP_KVM_BLK_OPTS}"}
 
