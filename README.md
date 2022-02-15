@@ -131,7 +131,8 @@ Multiples environment variables can be modified to alter default runtime.
 * DISK_PATH: (Default "/image") Directory path where disk image (and bootloader) will be stored
 
 * BOOTLOADER_URL: (Default "") URL web link of the bootloader (ie. "http://host/path/bootloader.img")
-	* If "bootloader.img" 
+	* It can be raw, zip, gzip or tgz file.
+	* If "bootloader.img" file already exists in DISK_PATH, then it skips BOOTLOADER_URL download.
 * BOOTLOADER_AS_USB: (Default "Y") Boot the bootloader as USB or as Disk
 
 * VM_IP: (Default "20.20.20.21") Assigned IP for VM DHCP. Don't need to be changed. 
