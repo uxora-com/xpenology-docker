@@ -1,3 +1,2 @@
 #!/bin/bash
-echo system_reset | nc -U /run/qemu-monitor.sock
-
+echo system_reset | nc -Uw1 /run/qemu-monitor.sock
