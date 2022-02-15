@@ -1,3 +1,2 @@
 #!/bin/bash
-echo delvm $1 | nc -U /run/qemu-monitor.sock
-
+echo delvm $1 | nc -Uw1 /run/qemu-monitor.sock
