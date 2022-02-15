@@ -6,7 +6,7 @@ echo "INFO: Shutting down VM..."
 processID=$(cat /run/qemu.pid)
 
 #Gracefull stop via power button
-echo system_powerdown | nc -U /run/qemu-monitor.sock
+echo system_powerdown | nc -Uw1 /run/qemu-monitor.sock
 
 #Wait for process die
 n=0
@@ -19,7 +19,7 @@ done
 
 [[ -e /proc/$processID ]] \
 	&& echo "WARNING: Timeout reached, force quit vm ..." \
-	&& echo quit | nc -U /run/qemu-monitor.sock
+	&& echo quit | nc -Uw1 /run/qemu-monitor.sock
 
 sleep 1
 [[ -e /proc/$processID ]] \
@@ -27,6 +27,7 @@ sleep 1
 	&& kill -9 $processID
 
 #Delete pid file
+sleep 1
 rm /run/qemu.pid
 #1 Second grace for Device unlocking
 sleep 1
