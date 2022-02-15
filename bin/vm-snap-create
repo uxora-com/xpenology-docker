@@ -23,7 +23,7 @@ echo "# ################################ #"
 if [[ "${DEV_TYPE}" == "usb" ]]; then
 	echo ""
 	echo "#### INFO: Ejecting bootloader ${DEV_TYPE} disk ..."
-	cat <<- __EOF__ | nc -U /run/qemu-monitor.sock | grep -q "${BOOTLOADER_FULLPATH}"
+	cat <<- __EOF__ | nc -Uw1 /run/qemu-monitor.sock | grep -q "${BOOTLOADER_FULLPATH}"
 		eject -f drive-disk-bootloader
 		info block
 	__EOF__
@@ -39,7 +39,7 @@ __BLOCKCOMMENT__
 
 echo ""
 echo "#### INFO: Saving vm ..."
-echo savevm $1 | nc -U /run/qemu-monitor.sock
+echo savevm $1 | nc -Uw1 /run/qemu-monitor.sock
 echo "" 
 
 # Remove parts of USB disk ejection
@@ -47,7 +47,7 @@ echo ""
 if [[ "${DEV_TYPE}" == "usb" ]]; then
 	echo ""
 	echo "#### INFO: Reinserting bootloader ${DEV_TYPE} disk ..."
-	cat <<- __EOF__ | nc -U /run/qemu-monitor.sock | grep -q "drive-disk-bootloader.*${BOOTLOADER_FULLPATH}"
+	cat <<- __EOF__ | nc -Uw1 /run/qemu-monitor.sock | grep -q "drive-disk-bootloader.*${BOOTLOADER_FULLPATH}"
 		change drive-disk-bootloader ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH##*.}
 		info block
 	__EOF__
