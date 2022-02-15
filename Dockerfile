@@ -1,6 +1,6 @@
 FROM uxora/debian-kvm
 LABEL maintainer="Michel VONGVILAY <https://www.uxora.com/about/me#contact-form>"
-LABEL version="0.2"
+LABEL version="0.3"
 
 # Ressources
 ENV CPU "qemu64"
@@ -70,8 +70,7 @@ RUN mkdir /qemu_cfg \
 #        && echo "INF: Bootloader sucessfully copied to ${DISK_PATH%/}/bootloader.raw" \
 #        || ( echo "ERR: Bootloader not found or invalid!" && exit 255 )
 
-COPY cfg /qemu_cfg/
-COPY bin /qemu_cfg/
+COPY bin cfg /qemu_cfg/
 RUN chmod -R +x /qemu_cfg/vm-* \
         && mv /qemu_cfg/vm-* /usr/bin/. \
         && echo "INF: shell scripts have been sucessfully copied to /usr/bin" \
