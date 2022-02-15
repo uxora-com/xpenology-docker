@@ -114,6 +114,9 @@ configureNetworks () {
 # ######################################
 # ######################################
 
+log "INFO" "Installing missing tools."
+apt update >/dev/null 2>&1
+apt-get install -y --no-install-recommends ethtool file netcat unzip vim-tiny >/dev/null 2>&1
 
 # Download and check synoboot bootloader
 # ######################################
@@ -139,13 +142,26 @@ elif [[ -f ${BOOTLOADER_FULLPATH} ]] ; then
 	log "INFO" "Skip URL download, raw bootloader already exist: ${BOOTLOADER_FULLPATH} ."
 else
 	log "INFO" "Start downloading bootloader from URL: ${BOOTLOADER_URL} ..."
-	wget --no-check-certificate -q --show-progress --progress=dot:giga ${BOOTLOADER_URL} -O ${BOOTLOADER_FULLPATH} \
+	wget --no-check-certificate -q --show-progress --progress=dot:giga ${BOOTLOADER_URL} -O ${BOOTLOADER_FULLPATH}.tmp \
 		&& echo "" && log "INFO" "Bootloader has been successfully downloaded from URL." \
-		|| ( log "ERROR" "Bootloader cannot be downloaded from URL." && exit 10 )
+		|| ( log "ERROR" "Bootloader cannot be downloaded from URL." && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 10 )
+
+	if [[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c ": gzip" ) -eq 1 ]]; then
+		log "INFO" "Downloaded file is detected as gzip file, extracting ..."
+		tar -xzOf ${BOOTLOADER_FULLPATH}.tmp $( tar -tzf ${BOOTLOADER_FULLPATH}.tmp | head -1 ) > ${BOOTLOADER_FULLPATH}.tmp2
+	elif [[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c ": Zip" ) -eq 1 ]]; then
+		log "INFO" "Downloaded file is detected as zip file, extracting ..."
+		unzip -p ${BOOTLOADER_FULLPATH}.tmp $( unzip -l ${BOOTLOADER_FULLPATH}.tmp | head -4 | tail -1 | awk '{print $4}' ) > ${BOOTLOADER_FULLPATH}.tmp2
+	fi
+	
+	[[ -f ${BOOTLOADER_FULLPATH}.tmp2 ]] && mv -f ${BOOTLOADER_FULLPATH}.tmp2 ${BOOTLOADER_FULLPATH}.tmp
+	
+	[[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c "boot sector" ) -eq 1 ]] \
+		&& mv ${BOOTLOADER_FULLPATH}.tmp ${BOOTLOADER_FULLPATH} \
+		|| ( log "ERROR" "Downloaded file is not bootable!" && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 11 )
 fi
 
-
-
+[[ $( ls -l ${BOOTLOADER_FULLPATH}.tmp* 2>/dev/null | wc -l ) -ne 0 ]] && rm -f ${BOOTLOADER_FULLPATH}.tmp*
 
 
 # Check bootloader
@@ -271,7 +287,10 @@ KVM_PREBOOT="${KVM_PREBOOT} -device 'ahci,id=ahci0,multifunction=on,bus=pci.0,ad
 if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 	log "INFO" "Adding snapshot disk ... "
 	fpath_diskname_="${DISK_PATH%/}/vm-disk-snapshot.${DISK_FORMAT}"
-	qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} 8M
+	[[ ! -f ${fpath_diskname_} ]] \
+		&& qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} 8M \
+		&& log "INFO" "... new snapshot disk created" \
+		|| log "INFO" "... SKIP: snapshot disk already exists"
 	KVM_PREBOOT="${KVM_PREBOOT} -drive 'file=${fpath_diskname_},if=none,id=drive-disk-snap,format=${DISK_FORMAT},${DISK_OPT_DRV}'"
 	if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]]; then
 		KVM_PREBOOT="${KVM_PREBOOT} -device 'virtio-blk-pci,drive=drive-disk-snap,id=virtio-disk-snap,bus=pci.0,addr=0xa'"
@@ -304,8 +323,8 @@ diskformat_=""
 
 i_scsi=0
 if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]]; then
- TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -iscsi 'initiator-name=iqn.1993-08.org.debian:01:c9fc21d990e0'"
- TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=scsihw0,bus=pci.0,addr=0x5'"
+ #TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -iscsi 'initiator-name=iqn.1993-08.org.debian:01:c9fc21d990e0'"
+ TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=scsihw0,bus=pcie.0,addr=0x10,num_queues=4'"
 fi
 
 i=0
@@ -317,10 +336,13 @@ for size in $DISK_SIZE ; do
 	elif [[ ${size%[Gg]} =~ ^[0-9]+$ ]]; then
 		diskformat_="${DISK_FORMAT}"
 		fpath_diskname_="${DISK_PATH%/}/vm-disk-data${i}.${diskformat_}"
-		[[ ! -f ${fpath_diskname_} ]] \
-			&& log "INFO" "... No Initial Disk found, creating disk : ${fpath_diskname_}" \
-			&& qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} ${size%[Gg]}G \
-			|| log "ERROR" "... No Initial Disk found, CANNOT create disk : ${fpath_diskname_}"
+		if [[ ! -f ${fpath_diskname_} ]]; then
+			log "INFO" "... No Initial Disk found, creating disk : ${fpath_diskname_}"
+			qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} ${size%[Gg]}G \
+				|| (log "ERROR" "... FAILED creating disk : ${fpath_diskname_}" && exit 13)
+		else
+			log "INFO" "... Disk already exists, SKIP creating disk : ${fpath_diskname_}"
+		fi
 		((++i))
 	else
 		log "WARNING" "... invalid argument : $size"	
@@ -328,9 +350,11 @@ for size in $DISK_SIZE ; do
 	fi
 	
 	if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]]; then
+		#TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=scsihw${i_scsi},bus=pcie.0,addr=0x$(( i_scsi+10 ))'"
 		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-scsi${i_scsi},format=${diskformat_},${DISK_OPT_DRV}'"
 		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'scsi-hd,bus=scsihw0.0,channel=0,scsi-id=0,lun=${i_scsi},drive=drive-scsi${i_scsi},id=scsi${i_scsi},${DISK_OPT_DEV}'"
-		# ,serial=VH000${i_scsi}
+		# TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'nvme,drive=drive-scsi${i_scsi},serial=nvme-${i_scsi},id=nvme${i_scsi}'"
+		# serial=VH000${i_scsi}
 		((++i_scsi))
 	else
 		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-sata${i_sata},format=${diskformat_},${DISK_OPT_DRV}'"
@@ -410,7 +434,6 @@ KVM_NET_OPTS="-netdev tap,ifname=vm-nat,script=no,downscript=no,id=hostnet0"
 
 # Hack for guest VMs complaining about "bad udp checksums in 5 packets"
 log "INFO" "Hack for guest VMs complaining about: bad udp checksums in 5 packets"
-apt install -y ethtool
 iptables -A POSTROUTING -t mangle -p udp --dport bootpc -j CHECKSUM --checksum-fill \
         || ( log "WARNING" "Iptables hack for checksum FAILED" && ethtool -K eth0 tx off || true )
 
