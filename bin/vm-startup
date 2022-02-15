@@ -395,7 +395,7 @@ if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && [[ "${VM_ENABLE_9P}" == [Yy1]* ]] &&
 	i=0
 	for path_ in $VM_PATH_9P ; do
 		log "INFO" "... path=${path_} , mount_tag=hostdata${i}"
-		KVM_9P="${KVM_9P} -fsdev local,security_model=passthrough,id=fsdev-fs0,path=${path_} -device virtio-9p-pci,id=fs${i},fsdev=fsdev-fs${i},mount_tag=hostdata${i},bus=pcie.0"
+		KVM_9P="${KVM_9P} -fsdev local,security_model=passthrough,id=fsdev-fs${i},path=${path_} -device virtio-9p-pci,id=fs${i},fsdev=fsdev-fs${i},mount_tag=hostdata${i},bus=pcie.0"
 		((++i))
 	done
 fi
