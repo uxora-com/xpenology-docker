@@ -44,7 +44,7 @@ set -e
 : ${GRUBCFG_DISKIDXMAP:=''}
 : ${GRUBCFG_SATAPORTMAP:=''}
 : ${GRUBCFG_SASIDXMAP:=''}
-
+: ${GRUBCFG_HDDHOTPLUG:=''}
 
 
 : ${DEBUG:='Y'}
@@ -209,6 +209,8 @@ if [[ $flag_bootl_err -eq 0 ]]; then
 	[[ "x${GRUBCFG_DISKIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "DiskIdxMap=" ${GRUBCFG_DISKIDXMAP} 1
 	[[ "x${GRUBCFG_SATAPORTMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "SataPortMap=" ${GRUBCFG_SATAPORTMAP} 1
 	[[ "x${GRUBCFG_SASIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "SasIdxMap=" ${GRUBCFG_SASIDXMAP} 1
+	
+	[[ "x${GRUBCFG_HDDHOTPLUG}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "HddHotplug=" ${GRUBCFG_HDDHOTPLUG} 0
 fi
 
 
