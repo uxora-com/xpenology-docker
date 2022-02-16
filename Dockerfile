@@ -1,6 +1,6 @@
 FROM uxora/debian-kvm
 LABEL maintainer="Michel VONGVILAY <https://www.uxora.com/about/me#contact-form>"
-LABEL version="0.3"
+LABEL version="0.4"
 
 # Ressources
 ENV CPU "qemu64"
@@ -46,39 +46,30 @@ ENV GRUBCFG_SATAPORTMAP ""
 ENV GRUBCFG_DISKIDXMAP ""
 # GRUBCFG_MAC1 will be automacticaly set to VM_MAC value
 
-# Removed apt-get coz we use segator/qemu-kvm image
-#ARG DEBIAN_FRONTEND=noninteractive
-#RUN \
-#  apt-get update && \
-#  apt-get install -y qemu-kvm qemu-utils bridge-utils dnsmasq uml-utilities iptables wget net-tools && \
-#  apt-get autoclean && \
-#  apt-get autoremove && \
-#  rm -rf /var/lib/apt/lists/*
-
-RUN mkdir /qemu_cfg \
-    && mkdir -p ${DISK_PATH}/cfg \
-	&& mkdir -p $VM_PATH_9P
-
-# Removed bootloader copy, using BOOTLOADER_URL download instead
-# This way it can directly run from docker hub 
-
-#COPY synoboot.im[g] /qemu_cfg/
-#RUN test -f /qemu_cfg/synoboot.img \
-#        || ( wget --no-check-certificate ${BOOTLOADER_URL} -O /qemu_cfg/synoboot.img 2>/dev/nul 1>&2 && echo "INF: Bootloader has been downloaded from URL." ) \
-#        && find /qemu_cfg -name synoboot.img -size +49M -size -51M | grep -q . \
-#        && mv /qemu_cfg/synoboot.img ${DISK_PATH%/}/bootloader.raw \
-#        && echo "INF: Bootloader sucessfully copied to ${DISK_PATH%/}/bootloader.raw" \
-#        || ( echo "ERR: Bootloader not found or invalid!" && exit 255 )
-
-COPY bin cfg /qemu_cfg/
-RUN chmod -R +x /qemu_cfg/vm-* \
-        && mv /qemu_cfg/vm-* /usr/bin/. \
-        && echo "INF: shell scripts have been sucessfully copied to /usr/bin" \
-        || ( echo "ERR: Something get wrong with shell scripts!" && exit 255 )
-
 EXPOSE 5000
 EXPOSE 5001
 
 VOLUME $VM_PATH_9P
 
 ENTRYPOINT /usr/bin/vm-startup
+
+# Using uxora/devian-kvm baseline image
+# Installing some more tools
+ARG DEBIAN_FRONTEND=noninteractive
+RUN \
+  apt-get update && \
+  apt-get install -y --no-install-recommends ethtool file netcat unzip vim-tiny && \
+  apt-get autoclean && \
+  apt-get autoremove && \
+  rm -rf /var/lib/apt/lists/*
+
+RUN mkdir /qemu_cfg \
+    && mkdir -p ${DISK_PATH}/cfg \
+	&& mkdir -p $VM_PATH_9P
+
+COPY bin cfg /qemu_cfg/
+
+RUN chmod -R +x /qemu_cfg/vm-* \
+        && mv /qemu_cfg/vm-* /usr/bin/. \
+        && echo "INF: shell scripts have been sucessfully copied to /usr/bin" \
+        || ( echo "ERR: Something get wrong with shell scripts!" && exit 255 )
