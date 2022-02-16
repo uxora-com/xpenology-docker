@@ -108,32 +108,47 @@ configureNetworks () {
   setupDhcp $VM_MAC $VM_IP
 }
 
+ddReplaceInFile () {
+	_tmpFile="$1"
+	_tmpSearch="$2"
+	_tmpReplace="$3"
+	
+	_tmpStr="${_tmpSearch}${_tmpReplace}"
+	_tmpRes="$( grep -oba "${_tmpSearch}[[:alnum:]]\{${#_tmpReplace}\}" ${_tmpFile} )"
+	
+	log "INFO" "ddReplace for: ${_tmpStr}"
+	
+	if [[ "x${_tmpRes}" != "x" ]]; then
+		for i in ${_tmpRes}; do
+			_tmpCnt="$( printf ${i#*:} | wc -c )"
+			[[ ${#_tmpStr} -ne ${_tmpCnt} ]] && log "WARNING" "... Nb of char is not equal: ${#_tmpStr} =/= ${i#*:}" && continue
+			printf "%-${_tmpCnt}s" "${_tmpStr}" | dd of=${_tmpFile} conv=notrunc bs=1 seek=${i%:*} count=${_tmpCnt} >/dev/null 2>&1
+			[[ $( grep -oba "${_tmpStr}" ${_tmpFile} | wc -l ) -gt 0 ]] \
+				&& log "INFO" "... Successful replacement of: ${i#*:}" \
+				|| log "WARNING" "... Unsuccessful: Reason unknown!"
+		done
+	else
+		log "WARNING" "... ${_tmpSearch} not found!"
+	fi
+}
+
 # ######################################
 # ######################################
 # 				MAIN 
 # ######################################
 # ######################################
 
-log "INFO" "Installing missing tools."
-apt update >/dev/null 2>&1
-apt-get install -y --no-install-recommends ethtool file netcat unzip vim-tiny >/dev/null 2>&1
+log "INFO" "Xpenology docker is starting ..."
+
+mkdir -p ${DISK_PATH}
 
 # Download and check synoboot bootloader
 # ######################################
 
 BOOTLOADER_FULLPATH="${DISK_PATH%/}/bootloader.img"
-flag_bootl_err=0
-
-for p in ${DISK_PATH} ; do
-	[[ ! -d $p ]] && mkdir -p $p
-done
-
-# Removed BOOTLOADER_REPLACE_IFEXISTS, otherwise it gonna do replace at every boot
-#: ${BOOTLOADER_REPLACE_IFEXISTS:='N'}
-#[[ "${BOOTLOADER_REPLACE_IFEXISTS}" == [Yy1]* ]] && [[ ! -f ${BOOTLOADER_FULLPATH} ]] \
-#	&& mv ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH}.old \
-#	&& log "INFO" "Old synoboot has been renamed with .old"
 BOOTLOADER_BAK_EXT=".tar.gz"
+
+flag_bootl_err=0
 if [[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] ; then
 	log "INFO" "Skip URL download, raw bootloader already exist: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ."
 	log "INFO" "${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} exists, skipping grub.cfg modification"
@@ -157,6 +172,7 @@ else
 	[[ -f ${BOOTLOADER_FULLPATH}.tmp2 ]] && mv -f ${BOOTLOADER_FULLPATH}.tmp2 ${BOOTLOADER_FULLPATH}.tmp
 	
 	[[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c "boot sector" ) -eq 1 ]] \
+		&& log "INFO" "Downloaded file seems bootable! Good good!" \
 		&& mv ${BOOTLOADER_FULLPATH}.tmp ${BOOTLOADER_FULLPATH} \
 		|| ( log "ERROR" "Downloaded file is not bootable!" && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 11 )
 fi
@@ -164,97 +180,24 @@ fi
 [[ $( ls -l ${BOOTLOADER_FULLPATH}.tmp* 2>/dev/null | wc -l ) -ne 0 ]] && rm -f ${BOOTLOADER_FULLPATH}.tmp*
 
 
-# Check bootloader
-
-# REMOVED because of different bootloader size
-#find ${DISK_PATH} -name ${BOOTLOADER_FULLPATH##*/} -size +48M -size -52M | grep -q . || flag_bootl_err=1
-#
-#[[ $flag_bootl_err -eq 0 ]] \
-#	&& log "INFO" "${BOOTLOADER_FULLPATH} file size seems valid for synoboot." \
-#	|| log "WARNING" "${BOOTLOADER_FULLPATH} file size does not seem correct for synoboot."
-
-
-# Extract bootloader partitions info
-if [[ $flag_bootl_err -eq 0 ]]; then
-
-	tmp_bootl_part1="$( fdisk -l -o Device,Start,Sectors,Type ${BOOTLOADER_FULLPATH} | grep -e .${BOOTLOADER_FULLPATH##*/}1.*2048 )"
-
-	[[ "x${tmp_bootl_part1}" == "x" ]] && flag_bootl_err=2
-
-	[[ $flag_bootl_err -eq 0 ]] \
-        && log "INFO" "${BOOTLOADER_FULLPATH} partitions seems ok." \
-        || log "WARNING" "${BOOTLOADER_FULLPATH} : cannot find disk image partitions"
-fi
-
 # grub.cfg modification
 if [[ $flag_bootl_err -eq 0 ]]; then
-	tmp_bootl_sz="$( fdisk -l ${BOOTLOADER_FULLPATH} | grep ^Sector | cut -d/ -f3 | tr -dc '0-9' )"
-	tmp_bootl_start="$( echo ${tmp_bootl_part1} | cut -d" " -f2 | tr -dc '0-9' )"
-	tmp_bootl_sector="$( echo ${tmp_bootl_part1} | cut -d" " -f3 | tr -dc '0-9' )"
-	tmp_bootl_mount_path="/mnt"
-	tmp_bootl_grubcfg_path="${tmp_bootl_mount_path}/grub/grub.cfg"
-
-	log "INFO" "... Backing up bootloader as ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
+	log "INFO" "Backing up bootloader: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
 	tar -czf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} -C ${BOOTLOADER_FULLPATH%/*} ${BOOTLOADER_FULLPATH##*/} 
 	
-	log "INFO" "Mounting bootloader image 1st partition..."
-	log "DEBUG" "Mount cmd: mount -o loop,offset=$((${tmp_bootl_start}*512)),sizelimit=$((${tmp_bootl_sector}*512)) ${BOOTLOADER_FULLPATH} ${tmp_bootl_mount_path}"
-	mount -o loop,offset=$((${tmp_bootl_start}*512)),sizelimit=$((${tmp_bootl_sector}*512)) ${BOOTLOADER_FULLPATH} ${tmp_bootl_mount_path} \
-	  && log "INFO" "... successfully mounting ${BOOTLOADER_FULLPATH}" \
-	  || log "WARNING" "... cannot mount ${BOOTLOADER_FULLPATH}"
+	log "INFO" "Modification of grub.cfg ..."
 	
-	if [[ -f ${tmp_bootl_grubcfg_path} ]]; then
-		flag_bootl_err=0
-	elif [[ -f "${tmp_bootl_mount_path}/boot/grub/grub.cfg" ]]; then
-		tmp_bootl_grubcfg_path="${tmp_bootl_mount_path}/boot/grub/grub.cfg"
-	else
-		flag_bootl_err=4
-		log "WARNING" "Cannot mount bootloader or find grub.cfg, is this a Xpenology bootloader?"
-		log "WARNING" "Cannot change pid/vid/sn/mac in bootloader, SO MAKE SURE MAC BOOTLOADER matches VM_MAC=${VM_MAC}!!!"
-	fi
+	[[ "x${GRUBCFG_VID}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "vid=0x" ${GRUBCFG_VID}
+	[[ "x${GRUBCFG_PID}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "pid=0x" ${GRUBCFG_PID}
 	
-	if [[ $flag_bootl_err -eq 0 ]]; then
-		log "INFO" "... Modifying grub.cfg"
-		
-		[[ "x${GRUBCFG_VID}" != "x" ]] \
-		  && sed -i \
-			-e "s/\(vid=\)\(0x[a-zA-Z0-9]\+\)/\10x${GRUBCFG_VID}/g" \
-			-e "s/\(pid=\)\(0x[a-zA-Z0-9]\+\)/\10x${GRUBCFG_PID}/g" \
-			${tmp_bootl_grubcfg_path} \
-		  && grep "vid=0x${GRUBCFG_VID}" ${tmp_bootl_grubcfg_path} \
-		  && log "DEBUG" "... grub.cfg: vid/pid changed to ${GRUBCFG_VID}/${GRUBCFG_PID}"
-
-		[[ "x${GRUBCFG_SN}" != "x" ]] \
-		  && sed -i -e "s/\(sn=\)\([a-zA-Z0-9]\+\)/\1${GRUBCFG_SN}/g" ${tmp_bootl_grubcfg_path} \
-		  && grep "sn=${GRUBCFG_SN}" ${tmp_bootl_grubcfg_path} \
-		  && log "DEBUG" "... grub.cfg: sn changed to ${GRUBCFG_SN}"
-
-		GRUBCFG_MAC1="$( echo ${VM_MAC} | tr -cd '[:alnum:]' | tr '[:lower:]' '[:upper:]' )"
-		[[ "x${GRUBCFG_MAC1}" != "x" && "x$( grep "mac1=${GRUBCFG_MAC1}" ${tmp_bootl_grubcfg_path} )" = "x" ]] \
-		  && sed -i -e "s/\(mac1=\)\([a-zA-Z0-9]\+\)/\1${GRUBCFG_MAC1}/g" ${tmp_bootl_grubcfg_path} \
-		  && grep "mac1=${GRUBCFG_MAC1}" ${tmp_bootl_grubcfg_path} \
-		  && log "DEBUG" "... grub.cfg: mac1 changed to ${GRUBCFG_MAC1}"
-
-		[[ "x${GRUBCFG_DISKIDXMAP}" != "x" ]] \
-		  && sed -i -e "s/\(DiskIdxMap=\)\([a-zA-Z0-9]\+\)/\1${GRUBCFG_DISKIDXMAP}/g" ${tmp_bootl_grubcfg_path} \
-		  && grep "DiskIdxMap=${GRUBCFG_DISKIDXMAP}" ${tmp_bootl_grubcfg_path} \
-		  && log "DEBUG" "... grub.cfg: DiskIdxMap changed to ${GRUBCFG_DISKIDXMAP}"
-
-		[[ "x${GRUBCFG_SATAPORTMAP}" != "x" ]] \
-		  && sed -i -e "s/\(SataPortMap=\)\([a-zA-Z0-9]\+\)/\1${GRUBCFG_SATAPORTMAP}/g" ${tmp_bootl_grubcfg_path} \
-		  && grep "SataPortMap=${GRUBCFG_SATAPORTMAP}" ${tmp_bootl_grubcfg_path} \
-		  && log "DEBUG" "... grub.cfg: SataPortMap changed to ${GRUBCFG_SATAPORTMAP}"
-
-		[[ "x${GRUBCFG_SASIDXMAP}" != "x" ]] \
-		  && sed -i -e "s/\(SasIdxMap=\)\([a-zA-Z0-9]\+\)/\1${GRUBCFG_SASIDXMAP}/g" ${tmp_bootl_grubcfg_path} \
-		  && grep "SasIdxMap=${GRUBCFG_SASIDXMAP}" ${tmp_bootl_grubcfg_path} \
-		  && log "DEBUG" "... grub.cfg: SasIdxMap changed to ${GRUBCFG_SASIDXMAP}"
-	fi
+	[[ "x${GRUBCFG_SN}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "sn=" ${GRUBCFG_SN}
 	
-	if [[ $flag_bootl_err -eq 0 || $flag_bootl_err -eq 4 ]]; then
-		log "INFO" "... Unmounting bootloader on ${tmp_bootl_mount_path} (if mounted)"
-		[[ $( mount | grep -c ${tmp_bootl_mount_path} ) -ne 0 ]] &&  umount ${tmp_bootl_mount_path}
-	fi
+	GRUBCFG_MAC1="$( echo ${VM_MAC} | tr -cd '[:alnum:]' | tr '[:lower:]' '[:upper:]' )"
+	[[ "x${GRUBCFG_MAC1}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "mac1=" ${GRUBCFG_MAC1}
+	
+	[[ "x${GRUBCFG_DISKIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "DiskIdxMap=" ${GRUBCFG_DISKIDXMAP}
+	[[ "x${GRUBCFG_SATAPORTMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "SataPortMap=" ${GRUBCFG_SATAPORTMAP}
+	[[ "x${GRUBCFG_SASIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "SasIdxMap=" ${GRUBCFG_SASIDXMAP}
 fi
 
 
