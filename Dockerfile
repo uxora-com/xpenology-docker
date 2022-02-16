@@ -1,6 +1,6 @@
 FROM uxora/debian-kvm
 LABEL maintainer="Michel VONGVILAY <https://www.uxora.com/about/me#contact-form>"
-LABEL version="0.4"
+LABEL version="0.5"
 
 # Ressources
 ENV CPU "qemu64"
@@ -43,7 +43,7 @@ ENV GRUBCFG_PID "0001"
 ENV GRUBCFG_SN ""
 ENV GRUBCFG_DISKIDXMAP ""
 ENV GRUBCFG_SATAPORTMAP ""
-ENV GRUBCFG_DISKIDXMAP ""
+ENV GRUBCFG_SASIDXMAP ""
 # GRUBCFG_MAC1 will be automacticaly set to VM_MAC value
 
 EXPOSE 5000
