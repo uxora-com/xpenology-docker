@@ -112,16 +112,21 @@ ddReplaceInFile () {
 	_tmpFile="$1"
 	_tmpSearch="$2"
 	_tmpReplace="$3"
+	_tmpMode="$4"
 	
 	_tmpStr="${_tmpSearch}${_tmpReplace}"
-	_tmpRes="$( grep -oba "${_tmpSearch}[[:alnum:]]\{${#_tmpReplace}\}" ${_tmpFile} )"
+	
+	[[ ${_tmpMode} -eq 0 ]] \
+	  && _tmpRes="$( grep -oba "${_tmpSearch}[[:alnum:]]\{${#_tmpReplace}\}" ${_tmpFile} )" \
+	  || _tmpRes="$( grep -oba "${_tmpSearch}[[:alnum:]]\+" ${_tmpFile} )"
 	
 	log "INFO" "ddReplace for: ${_tmpStr}"
 	
 	if [[ "x${_tmpRes}" != "x" ]]; then
 		for i in ${_tmpRes}; do
 			_tmpCnt="$( printf ${i#*:} | wc -c )"
-			[[ ${#_tmpStr} -ne ${_tmpCnt} ]] && log "WARNING" "... Nb of char is not equal: ${#_tmpStr} =/= ${i#*:}" && continue
+			[[ ${#_tmpStr} -ne ${_tmpCnt} ]] && [[ ${_tmpMode} -eq 0 ]] \
+				&& log "WARNING" "... Nb of char is not equal: ${#_tmpStr} =/= ${i#*:}" && continue
 			printf "%-${_tmpCnt}s" "${_tmpStr}" | dd of=${_tmpFile} conv=notrunc bs=1 seek=${i%:*} count=${_tmpCnt} >/dev/null 2>&1
 			[[ $( grep -oba "${_tmpStr}" ${_tmpFile} | wc -l ) -gt 0 ]] \
 				&& log "INFO" "... Successful replacement of: ${i#*:}" \
@@ -141,6 +146,12 @@ ddReplaceInFile () {
 log "INFO" "Xpenology docker is starting ..."
 
 mkdir -p ${DISK_PATH}
+
+# Patch
+# ######################################
+log "INFO" "Little dirty trick ..."
+update-alternatives --set iptables /usr/sbin/iptables-legacy
+update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 # Download and check synoboot bootloader
 # ######################################
@@ -187,17 +198,17 @@ if [[ $flag_bootl_err -eq 0 ]]; then
 	
 	log "INFO" "Modification of grub.cfg ..."
 	
-	[[ "x${GRUBCFG_VID}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "vid=0x" ${GRUBCFG_VID}
-	[[ "x${GRUBCFG_PID}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "pid=0x" ${GRUBCFG_PID}
+	[[ "x${GRUBCFG_VID}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "vid=0x" ${GRUBCFG_VID} 0
+	[[ "x${GRUBCFG_PID}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "pid=0x" ${GRUBCFG_PID} 0
 	
-	[[ "x${GRUBCFG_SN}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "sn=" ${GRUBCFG_SN}
+	[[ "x${GRUBCFG_SN}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "sn=" ${GRUBCFG_SN} 0
 	
 	GRUBCFG_MAC1="$( echo ${VM_MAC} | tr -cd '[:alnum:]' | tr '[:lower:]' '[:upper:]' )"
-	[[ "x${GRUBCFG_MAC1}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "mac1=" ${GRUBCFG_MAC1}
+	[[ "x${GRUBCFG_MAC1}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "mac1=" ${GRUBCFG_MAC1} 0
 	
-	[[ "x${GRUBCFG_DISKIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "DiskIdxMap=" ${GRUBCFG_DISKIDXMAP}
-	[[ "x${GRUBCFG_SATAPORTMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "SataPortMap=" ${GRUBCFG_SATAPORTMAP}
-	[[ "x${GRUBCFG_SASIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "SasIdxMap=" ${GRUBCFG_SASIDXMAP}
+	[[ "x${GRUBCFG_DISKIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "DiskIdxMap=" ${GRUBCFG_DISKIDXMAP} 1
+	[[ "x${GRUBCFG_SATAPORTMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "SataPortMap=" ${GRUBCFG_SATAPORTMAP} 1
+	[[ "x${GRUBCFG_SASIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "SasIdxMap=" ${GRUBCFG_SASIDXMAP} 1
 fi
 
 
