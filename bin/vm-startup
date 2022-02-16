@@ -43,7 +43,7 @@ set -e
 : ${GRUBCFG_MAC1:=''}
 : ${GRUBCFG_DISKIDXMAP:=''}
 : ${GRUBCFG_SATAPORTMAP:=''}
-: ${GRUBCFG_DISKIDXMAP:=''}
+: ${GRUBCFG_SASIDXMAP:=''}
 
 
 
