@@ -2,28 +2,28 @@
 
 KVM VirtualMachine of Xpenology DSM running in a docker container, which can be run directly from docker-hub by specifying a BOOTLOADER_URL.
 
-This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3/7.0.1 with jun and redpill xpenology bootloader.
+This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3/7.0.1 with jun and redpill bootloader.
 So technicaly it can run any bootloader you provide.
 
 Latest tested (dor DS3615xs):
-- 6.2.3 with Jun's 1.03b
-- 7.0.1 with redpill (working but need more testing)
+- 6.2.3 with Jun's 1.03b (virtio+9p)
+- 7.0.1 with redpill (virtio+9p)
 
 UPDATE:
-- PID, VID and SN (Serial Number), which can be now set in variable, is now directly changed in bootloader during first boot.
+- PID, VID and SN (Serial Number) can now be pass as parameter to Docker, the bootloader is modified during the first boot.
 - Redpill bootloader compatibility
 
 The project is based on [segator/xpenology-docker](https://github.com/segator/xpenology-docker) project which is based on [BBVA/kvm](https://github.com/BBVA/kvm) project.
 
-## Warning
+## Warning / Disclaimer
 
 This system is for testing or educational purpose ONLY, and It is NOT recommended for using in production environment because it has no support and it has not been proven  stable/reliable.
 
-So if DATA LOSS happens by using this system, this is ONLY on your own responsibility.
+So DATA LOSS can happens by using this system due to its instability, SO this is ONLY on your own responsibility to use.
 
 If you are happy with the testing of this product, I would highly recommend you to go for an original Synology hardware especially for PRODUCTION environment where data is critical.
 
-## Repositories/Tutorial
+## Repositories / Tutorial
 
 Source code : https://github.com/uxora-com/xpenology-docker
 
@@ -38,34 +38,33 @@ Personnal testing has been done with ds3615xs jun's loader 1.03b with virtio dri
 
 - Proxmox Lxc (OK):
 	- Cpu AMD
-	- Proxmox 6.2-11 Kernel 5.4.60-1-pve
+	- Proxmox 6.4-13 Kernel 5.4.140-1-pve
 	- Template lxc "debian-10-standard_10.5-1_amd64"
-	- dsm 6.2.3 OK, Live snapshot OK, 9p mount OK
+	- dsm 6.2.3/7.0.1-42218 OK, Live snapshot OK, 9p mount OK
 
 - MxLinux live usb (OK):
 	- Cpu Intel i7
 	- Linux Debian 4.19.0-9-amd64
-	- dsm 6.2.3 OK, Live snapshot OK, 9p mount OK
-	- dsm 7.0.1-42218 OK (Redpill bootloader)
+	- dsm 6.2.3/7.0.1-42218 OK, Live snapshot OK, 9p mount OK
 
 - Windows 10 docker (OK but Slow):
 	- Intel i7 cpu
-	- dsm 6.2.3 OK but very slow for loading bootloader, Snapshot and 9p not tested
+	- dsm 6.2.3 OK but very slow for loading bootloader
 
-- Proxmox VM Linux Debian 10 (NOT working):
+- Proxmox VM Linux Debian 10 (OK):
 	- Nested virtualization all set and validated with virt-host-validate
-	- After grub boot menu, it's black screen or sometime mount error
-	- I don't know why it doesn't work, any idea?
+	- dsm 6.2.3/7.0.1-42218 OK, Live snapshot OK, 9p mount OK
 
 If you have any issue, please raise it in "issues" area.
+
 
 ## Features
 
 This image provides some special features to get the VM running as straightforward as possible
 - VM DHCP: Runing VM will have DHCP and will be provisioned with 20.20.20.21 (by default)
-- Port Forwarding From container to VM, in order to access to the VM using the container IP
-- Live Snapshoting
-- 9P Mountpoints (Access docker volumes from Xpenology)
+- Port Forwarding From container to VM, in order to access to the VM using the HOST_IP:5000
+- Live Snapshoting: Create and restore (pretty useful to test update)
+- 9P Mountpoints (Access host docker volumes from Xpenology)
 
 
 ## Requirements
@@ -84,10 +83,11 @@ This image provides some special features to get the VM running as straightforwa
 ```bash
 # Simple run
 $ docker run --privileged \
-	-e BOOTLOADER_URL="http://example.com/path/synoboot.img" \
+	-e BOOTLOADER_URL="http://example.com/path/synoboot.tgz" \
 	uxora/xpenology
 
 # Run with more specific parameters
+$ mkdir -vp /xpenodock/{syst,data}
 $ docker run --privileged --cap-add=NET_ADMIN \
 	--device=/dev/net/tun --device=/dev/kvm \
 	-p 5000:5000 -p 5001:5001 -p 2222:22 -p 8080:80 \
@@ -96,10 +96,10 @@ $ docker run --privileged --cap-add=NET_ADMIN \
 	-e RAM=512 \
 	-e DISK_SIZE="8G 16G" \
 	-e DISK_PATH="/xpy_syst" \
-	-e BOOTLOADER_URL="http://192.168.0.14/joomla/tmp/synoboot.img" \
-	-e BOOTLOADER_AS_USB="Y" \
-	-e VM_ENABLE_VIRTIO="Y" \
 	-e VM_PATH_9P="/xpy_data /xpy_syst" \
+	-e VM_ENABLE_VIRTIO="Y" \
+	-e BOOTLOADER_AS_USB="Y" \
+	-e BOOTLOADER_URL="http://192.168.0.14/path/synoboot.zip" \
 	-v /xpenodock/data:/xpy_data \
 	-v /xpenodock/syst:/xpy_syst \
 	uxora/xpenology
@@ -107,7 +107,7 @@ $ docker run --privileged --cap-add=NET_ADMIN \
 
 Note0: For full disk passtrough, check tutorial here: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
 
-Note1: If you do not want to use BOOTLOADER_URL, but local copy, then check the tutorial.
+Note1: If you do not want to use BOOTLOADER_URL, copy it as "bootloader.img" to DISK_PATH. In our 2nd example, bootloader should be copied to "/xpenodock/syst/bootloader.img".
 
 Note2: After successfully running this container, you will be able to access the DSM WebUI with docker HOST_IP and port 5000 (ie. 192.168.1.25:5000).
 
@@ -139,8 +139,8 @@ Multiples environment variables can be modified to alter default runtime.
 * VM_MAC: (Default "00:11:32:2C:A7:85") Mac address use for VM DHCP to assigne VM_IP. This need to match MAC set in xpenology grub bootloader. 
 
 * VM_ENABLE_VGA: (Default "No") Enabling qxl vga and vnc. Not needed for Xpenology.
-* VM_ENABLE_VIRTIO: (Default "Yes") Enabling virtio disk. Make sure that synoboot has virtio drivers.
-* VM_ENABLE_VIRTIO_SCSI: (Default "No") Enabling virtio scsi disk. Make sure that synoboot has virtio drivers.
+* VM_ENABLE_VIRTIO: (Default "Yes") Enabling virtio disk. Make sure that bootloader has virtio drivers.
+* VM_ENABLE_VIRTIO_SCSI: (Default "No") Enabling virtio scsi disk. Make sure that bootloader has virtio drivers. Need VM_ENABLE_VIRTIO enabled.
 * VM_ENABLE_9P: (Default "Yes") Enabling virtio 9p mount point. Need VM_ENABLE_VIRTIO enabled.
 * VM_PATH_9P: (Default "/datashare") Directories path of 9p mount point to be shared with xpenology
 	* Need VM_ENABLE_9P enabled and -v docker option (ie. -v /xpenodock/data:/xpy_data)
@@ -157,8 +157,8 @@ Multiples environment variables can be modified to alter default runtime.
 
 ## Featured Functions
 The container has extra defined functions which allow you to manipulate the running VM:
-- vm-powerdown: This function Shutdown graceful the VM, until VM_TIMEOUT_POWERDOWN variable is reached.
-- vm-reset: Hard Reset the VM (this function doesn't stop the container)
+- vm-power-down: This function Shutdown graceful the VM, until VM_TIMEOUT_POWERDOWN variable is reached.
+- vm-power-reset: Hard Reset the VM (this function doesn't stop the container)
 - vm-snap-create <snapshotName>: Create a Live snapshot with memory (work with DISK_FORMAT=qcow2)
 - vm-snap-delete <snapshotName>: Delete a Live snapshot
 - vm-snap-restore <snapshotName>: stop the VM and restart using the choosed snapshot
@@ -175,6 +175,8 @@ $ docker exec -ti $( docker container ls -f 'ancestor=uxora/xpenology' -f "statu
 
 ### Build docker image
 
+If you want to make some code changes of your own.
+
 ```bash
 $ git clone https://github.com/uxora-com/xpenology-docker.git
 $ cd xpenology-docker
@@ -190,6 +192,7 @@ Check [this forum](https://xpenology.com/forum/) for more details about xpenolog
 And follow [this tutorial](https://xpenology.club/compile-drivers-xpenology-with-windows-10-and-build-in-bash) if you want to compile drivers for your specific xpenology version.
 
 ### Recommended setup (without BOOTLOADER_URL)
+
 ```bash
 # To avoid ip_tables error on docker
 $ modprobe ip_tables
@@ -200,12 +203,11 @@ $ mkdir -vp /xpenodock/{data,syst,slnk}
 # Copy bootloader
 $ cp synoboot_103b_ds3615xs_virtio_9p.img /xpenodock/syst/bootloader.img
 
-# Run xpenology docker (fake SN: need to change)
+# Run xpenology docker (Warning: fake SN which need to be changed)
 $ docker run --privileged --cap-add=NET_ADMIN \
     --device=/dev/net/tun --device=/dev/kvm \
     -p 5000:5000 -p 5001:5001 -p 2222:22 -p 8080:80 \
-    -e CPU="qemu64" -e THREADS=1 -e RAM=512 -e DISK_SIZE="16G" \
-    -e BOOTLOADER_AS_USB="Y" -e VM_ENABLE_VIRTIO="Y" \
+    -e RAM=512 -e DISK_SIZE="16G" \
     -e GRUBCFG_SN="1234ABC012345" \
     -e DISK_PATH="/xpy_syst" -e VM_PATH_9P="/xpy_data" \
     -v /xpenodock/syst:/xpy_syst -v /xpenodock/data:/xpy_data \
@@ -226,64 +228,68 @@ $ sudo insmod /volume1/homes/admin/9pnet.ko
 $ sudo insmod /volume1/homes/admin/9pnet_virtio.ko
 $ sudo insmod /volume1/homes/admin/9p.ko
 
-#Create a "new share folder" in File Staion from DSM gui (ie. datashare)
-#Then mount 9p hostdata to this folder in ssh terminal on xpenology vm
-$ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata0 /volume1/datashare
+# From DSM web gui, create a "new share folder" in File Station (ie. datashare9p)
+# Open a ssh terminal on xpenology, then mount 9p hostdata0 to this folder  
+$ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata0 /volume1/datashare9p
 ```
 	
 ## TroubleShooting
 
 * Privileged mode (`--privileged`) is needed in order for KVM to access to macvtap devices
 
-* If you get the following error from KVM:
-
+	
+#### If you get the following error from KVM:
 ```
 qemu-kvm: -netdev tap,id=net0,vhost=on,fd=3: vhost-net requested but could not be initialized
   
 qemu-kvm: -netdev tap,id=net0,vhost=on,fd=3: Device 'tap' could not be initialized
 ```
 
-you will need to load the `vhost-net` kernel module in your dockerhost (as root) prior to launch this container:
-  
-```bash 
+* you will need to load the `vhost-net` kernel module in your dockerhost (as root) prior to launch this container:
+```bash
 $ modprobe vhost-net
 ```
 
-Sometimes on start the VM some random errors appear(I don't know why yet) 
+	
+#### Sometimes on start the VM some random errors appear(I don't know why yet)
 ```
 cpage out of range (5)
 processing error - resetting ehci HC
 ```
-If this happen to you simple reboot the container
+* If this happen to you simple reboot the container
 
-* If you have permission issue with /dev/kvm or /dev/net/tun, give other +rw permission in host
+	
+#### If you have permission issue with /dev/kvm or /dev/net/tun, give other +rw permission in host
 ```bash
 $ chmod o+rw /dev/kvm
 $ chmod o+rw /dev/net/tun
 ```
-* If you have fuse issue
+
+
+#### If you have fuse issue
 ```bash
 $ modprobe fuse
 # or # $ apt-get reinstall fuse
 ```
 
-* if iptables issue with msg like:
+
+#### if iptables issue with msg like:
 ```
 	iptables v1.6.0: can't initialize iptables table `nat': Table does not exist (do you need to insmod?)
 	Perhaps iptables or your kernel needs to be upgraded.
 ```
 
-Try to reload ip_tables module
+* Try to reload ip_tables module
 ```bash
 $ modprobe ip_tables
 ```
 
-* If you have corrupt file (13) during dsm installation
+#### If you have corrupt file (13) during dsm installation
 	- Make sure you have set the right GRUBCFG_VID, GRUBCFG_PID and GRUBCFG_SN.
 
-* If you want to change bootloader (or reload bootloader with different vid, pid and sn); In the folder where is stored bootloader (./syst):
+#### If you want to change bootloader (or reload bootloader with different vid, pid and sn); In the folder where is stored bootloader (./syst):
 	- Delete "bootloader.qcow2" or "bootloader.img"
-	- Rename "bootloader.img.orig" to "bootloader.img"
+	- Uncompress "bootloader.img.tar.gz" then delete it
 	- Restart docker with new parameters
 	
 	
