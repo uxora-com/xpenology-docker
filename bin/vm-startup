@@ -239,7 +239,7 @@ fi
 # ######################################
 i_sata=0
 : ${KVM_PREBOOT:=""}
-KVM_PREBOOT="${KVM_PREBOOT} -device 'ahci,id=ahci0,multifunction=on,bus=pci.0,addr=0x7'"
+KVM_PREBOOT="${KVM_PREBOOT} -device 'ahci,id=ahci0,multifunction=on,bus=pcie.0,addr=0x10'"
 if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 	log "INFO" "Adding snapshot disk ... "
 	fpath_diskname_="${DISK_PATH%/}/vm-disk-snapshot.${DISK_FORMAT}"
@@ -249,7 +249,7 @@ if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 		|| log "INFO" "... SKIP: snapshot disk already exists"
 	KVM_PREBOOT="${KVM_PREBOOT} -drive 'file=${fpath_diskname_},if=none,id=drive-disk-snap,format=${DISK_FORMAT},${DISK_OPT_DRV}'"
 	if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]]; then
-		KVM_PREBOOT="${KVM_PREBOOT} -device 'virtio-blk-pci,drive=drive-disk-snap,id=virtio-disk-snap,bus=pci.0,addr=0xa'"
+		KVM_PREBOOT="${KVM_PREBOOT} -device 'virtio-blk-pci,drive=drive-disk-snap,id=virtio-disk-snap,bus=pcie.0,addr=0x4'"
 	else
 		KVM_PREBOOT="${KVM_PREBOOT} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-snap,id=sata-disk-snap'"
 		((++i_sata))
@@ -277,13 +277,10 @@ TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS}"
 fpath_diskname_=""
 diskformat_=""
 
-i_scsi=0
-if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]]; then
- #TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -iscsi 'initiator-name=iqn.1993-08.org.debian:01:c9fc21d990e0'"
- TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=scsihw0,bus=pcie.0,addr=0x10,num_queues=4'"
-fi
 
 i=0
+i_scsi=0
+_tmpDevName="null"
 for size in $DISK_SIZE ; do
 	if [[ $size == "/dev/"* ]] && [[ -e "$size" ]]; then
 		log "INFO" "... adding full device : $size"
@@ -305,10 +302,14 @@ for size in $DISK_SIZE ; do
 		continue
 	fi
 	
-	if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]]; then
-		#TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=scsihw${i_scsi},bus=pcie.0,addr=0x$(( i_scsi+10 ))'"
+	if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [YySs12]* ]]; then
+		if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [Ss2]* ]] || [[ ${i_scsi} -eq 0 ]]; then
+			_tmpDevName="scsihw${i_scsi}"
+			TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=${_tmpDevName},bus=pcie.0,addr=0x$( printf "%02x\n" "$(( i_scsi+24 ))" )'"
+		fi
 		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-scsi${i_scsi},format=${diskformat_},${DISK_OPT_DRV}'"
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'scsi-hd,bus=scsihw0.0,channel=0,scsi-id=0,lun=${i_scsi},drive=drive-scsi${i_scsi},id=scsi${i_scsi},${DISK_OPT_DEV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'scsi-hd,bus=${_tmpDevName}.0,channel=0,scsi-id=0,lun=${i_scsi},drive=drive-scsi${i_scsi},id=scsi${i_scsi},${DISK_OPT_DEV}'"
+		
 		# TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'nvme,drive=drive-scsi${i_scsi},serial=nvme-${i_scsi},id=nvme${i_scsi}'"
 		# serial=VH000${i_scsi}
 		((++i_scsi))
@@ -324,7 +325,6 @@ done
 # ######################################
 : ${KVM_OPTS:="\
   -machine q35 \
-  -readconfig /qemu_cfg/pve-q35-4.0.cfg \
   -nodefaults \
   -overcommit mem-lock=off \
   -msg timestamp=on \
@@ -334,8 +334,11 @@ done
   -monitor unix:/run/qemu-monitor.sock,server,nowait \
   -pidfile /run/qemu.pid \
   "}
+  # Removed readconfig but keep file
+  # because re-addressing pcie.0 device with addr option 
+  # -readconfig /qemu_cfg/pve-q35-4.0.cfg
 
-[[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && KVM_OPTS="${KVM_OPTS} -device 'virtio-balloon-pci,id=balloon0,bus=pci.0,addr=0x3'"
+[[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && KVM_OPTS="${KVM_OPTS} -device 'virtio-balloon-pci,id=balloon0,bus=pcie.0,addr=0x2'"
 
 # Set Qemu CPU and RAM
 # ######################################
