@@ -13,8 +13,6 @@ UPDATE:
 - PID, VID and SN (Serial Number) can now be pass as parameter to Docker, the bootloader is modified during the first boot.
 - Redpill bootloader compatibility
 
-The project is based on [segator/xpenology-docker](https://github.com/segator/xpenology-docker) project which is based on [BBVA/kvm](https://github.com/BBVA/kvm) project.
-
 ## Warning / Disclaimer
 
 This system is for testing or educational purpose ONLY, and It is NOT recommended for using in production environment because it has no support and it has not been proven  stable/reliable.
@@ -100,6 +98,7 @@ $ docker run --privileged --cap-add=NET_ADMIN \
 	-e VM_ENABLE_VIRTIO="Y" \
 	-e BOOTLOADER_AS_USB="Y" \
 	-e BOOTLOADER_URL="http://192.168.0.14/path/synoboot.zip" \
+	-e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
 	-v /xpenodock/data:/xpy_data \
 	-v /xpenodock/syst:/xpy_syst \
 	uxora/xpenology
@@ -154,6 +153,10 @@ Multiples environment variables can be modified to alter default runtime.
 * GRUBCFG_PID: (Default "0001") ProductID of bootloader disk.
 * GRUBCFG_SN: (Default "") Serial number of DSM.
 
+* GRUBCFG_DISKIDXMAP: (Default "")
+* GRUBCFG_SATAPORTMAP: (Default "")
+* GRUBCFG_HDDHOTPLUG: (Default "")
+
 
 ## Featured Functions
 The container has extra defined functions which allow you to manipulate the running VM:
@@ -206,9 +209,11 @@ $ cp synoboot_103b_ds3615xs_virtio_9p.img /xpenodock/syst/bootloader.img
 # Run xpenology docker (Warning: fake SN which need to be changed)
 $ docker run --privileged --cap-add=NET_ADMIN \
     --device=/dev/net/tun --device=/dev/kvm \
-    -p 5000:5000 -p 5001:5001 -p 2222:22 -p 8080:80 \
-    -e RAM=512 -e DISK_SIZE="16G" \
+    -p 5000-5001:5000-5001 -p 2222:22 -p 8080:80 \
+    -p 137-139:137-139 -p 445:445 \
+    -e RAM="512" -e DISK_SIZE="16G" \
     -e GRUBCFG_SN="1234ABC012345" \
+    -e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
     -e DISK_PATH="/xpy_syst" -e VM_PATH_9P="/xpy_data" \
     -v /xpenodock/syst:/xpy_syst -v /xpenodock/data:/xpy_data \
     uxora/xpenology
@@ -232,11 +237,29 @@ $ sudo insmod /volume1/homes/admin/9p.ko
 # Open a ssh terminal on xpenology, then mount 9p hostdata0 to this folder  
 $ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata0 /volume1/datashare9p
 ```
-	
+
+If you want automount 9p folder at boot time, use "Control Panel > Task Scheduler > Create > Triggered Task" to set this command line as root schedule task.
+
+### SAMBA
+Make sure to forward SMB ports on docker command line by adding `-p 137-139:137-139 -p 445:445`.
+Then access it by `\\HOST_IP`.
+If you want to access by name, you will have to add it on `hosts` file of your machine.
+
+### Changing container parameters
+If you need to change a bootloader parameter (VM_MAC and GRUBCFG_*):
+- In DISK_PATH (ie. `/xpenodock/syst`) folder, uncompress : `$ tar -xzf bootloader.img.tar.gz`
+- Then delete: `$ rm bootloader.img.tar.gz bootloader.qcow2`
+- Then follow instructions below for others parameters
+
+Otherwise for all others parameters :
+- If you want, delete old container: `$ docker container rm $( docker container ls -qf 'ancestor=uxora/xpenology' )`
+- Then recreate a container with new parameters: `$ docker run --privileged [...]`
+
+Note: Changing container or bootloader does not affect your dsm xpenology data. You should get it back the same as before as long as it uses the same vm disks.	
+
 ## TroubleShooting
 
 * Privileged mode (`--privileged`) is needed in order for KVM to access to macvtap devices
-
 	
 #### If you get the following error from KVM:
 ```
@@ -287,11 +310,14 @@ $ modprobe ip_tables
 #### If you have corrupt file (13) during dsm installation
 	- Make sure you have set the right GRUBCFG_VID, GRUBCFG_PID and GRUBCFG_SN.
 
-#### If you want to change bootloader (or reload bootloader with different vid, pid and sn); In the folder where is stored bootloader (./syst):
-	- Delete "bootloader.qcow2" or "bootloader.img"
-	- Uncompress "bootloader.img.tar.gz" then delete it
-	- Restart docker with new parameters
-	
+#### Something went wrong (hard drives and SATA ports)
+With the following message
+```
+We've detected errors on the hard drive (x, y) and the SATA ports have also been disabled.
+```
+* Then try to add these bootloader parameters: `-e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2"`
+* This required to delete current bootloader to be able to rebuilt it
+* Try to change to other value if this one does not work  
 	
 ## License
 Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file to you under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
@@ -303,4 +329,10 @@ Unless required by applicable law or agreed to in writing, software distributed 
 ## Contributors
 Michel VONGVILAY ([www.uxora.com](https://www.uxora.com/about/me#contact-form))
 
-Based on project of : Isaac Aymerich and BBVA Innotech
+Project based on :
+* Isaac Aymerich - [segator/xpenology-docker](https://github.com/segator/xpenology-docker)
+* BBVA Innotech - [BBVA/kvm](https://github.com/BBVA/kvm)
+
+## Want to buy me a coffee
+* ERC20/BEP20 : 0xD861bc743495b2f1b00Cd420092d548833369756
+* BTC: bc1qzjg4t55ljcr3vmdegh2c85xgejk89xqw0m3pxc
