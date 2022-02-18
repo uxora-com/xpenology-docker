@@ -1,5 +1,8 @@
 #!/bin/bash
 set -e
+mkdir -p ${DISK_PATH}/log ${VM_9P_PATH}
+exec &> >(tee -a ${DISK_PATH}/log/xpenodock$(date "+_%Y%m%d_%H%M%S").log)
+
 # This entrypoint for KVM container configures and attaches network bridges to
 # the VM and starts KVM with the selected options.
 
@@ -18,9 +21,8 @@ set -e
 
 : ${DISK_SIZE:='16'}
 : ${DISK_FORMAT:='qcow2'}
-: ${DISK_CACHE:='none'}
-: ${DISK_OPT_DRV:='cache=writeback,discard=on,aio=threads,detect-zeroes=on'}
-: ${DISK_OPT_DEV:='rotation_rate=1'}
+: ${DISK_OPTS_DRV:='cache=writeback,discard=on,aio=threads,detect-zeroes=on'}
+: ${DISK_OPTS_DEV:='rotation_rate=1'}
 : ${DISK_PATH:='/image'}
 
 : ${VM_IP:="20.20.20.21"}
@@ -32,6 +34,8 @@ set -e
 : ${VM_ENABLE_VGA:="N"}
 
 : ${VM_PATH_9P:=''}
+: ${VM_9P_PATH:=''}
+: ${VM_9P_OPTS:='local,security_model=passthrough'}
 : ${VM_CUSTOM_OPTS:=''}
 
 : ${BOOTLOADER_URL:='http://host/path/bootloader.img'}
@@ -143,15 +147,22 @@ ddReplaceInFile () {
 # ######################################
 # ######################################
 
-log "INFO" "Xpenology docker is starting ..."
+log "INFO" "Xpenology docker V${SCRIPT_VERSION} is starting [pid:${$}] ..."
 
-mkdir -p ${DISK_PATH}
+# DEPRECATED
+[[ "x${VM_PATH_9P}" != "x" ]] \
+	&& log "ERROR" "VM_PATH_9P is deprecated! Use VM_9P_PATH instead." && exit 2
+[[ "x${DISK_CACHE}" != "x" ]] \
+	&& log "ERROR" "DISK_CACHE is deprecated! Use DISK_OPTS_DRV instead." && exit 3
 
 # Patch
 # ######################################
 log "INFO" "Little dirty trick ..."
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+
+[[ "x${DISK_OPTS_DRV}" != "x" ]] && DISK_OPTS_DRV=",${DISK_OPTS_DRV#,}"
+[[ "x${DISK_OPTS_DEV}" != "x" ]] && DISK_OPTS_DEV=",${DISK_OPTS_DEV#,}"
 
 # Download and check synoboot bootloader
 # ######################################
@@ -247,11 +258,11 @@ if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 		&& qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} 8M \
 		&& log "INFO" "... new snapshot disk created" \
 		|| log "INFO" "... SKIP: snapshot disk already exists"
-	KVM_PREBOOT="${KVM_PREBOOT} -drive 'file=${fpath_diskname_},if=none,id=drive-disk-snap,format=${DISK_FORMAT},${DISK_OPT_DRV}'"
+	KVM_PREBOOT="${KVM_PREBOOT} -drive 'file=${fpath_diskname_},if=none,id=drive-disk-snap,format=${DISK_FORMAT}${DISK_OPTS_DRV}'"
 	if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]]; then
 		KVM_PREBOOT="${KVM_PREBOOT} -device 'virtio-blk-pci,drive=drive-disk-snap,id=virtio-disk-snap,bus=pcie.0,addr=0x4'"
 	else
-		KVM_PREBOOT="${KVM_PREBOOT} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-snap,id=sata-disk-snap'"
+		KVM_PREBOOT="${KVM_PREBOOT} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-disk-snap,id=sata-disk-snap'"
 		((++i_sata))
 	fi
 fi
@@ -260,7 +271,7 @@ fi
 # ######################################
 log "INFO" "Adding bootloader as $([[ ${BOOTLOADER_AS_USB} == [Yy1]* ]] && echo "USB" || echo "SATA") ..."
 KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'nec-usb-xhci,id=usb-bus0,multifunction=on'"
-KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-disk-bootloader,cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
+KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-disk-bootloader${DISK_OPTS_DRV}'"
 
 if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]]; then
 	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'usb-storage,bus=usb-bus0.0,port=1,drive=drive-disk-bootloader,id=usb-disk-bootloader,bootindex=1,removable=on'"
@@ -307,15 +318,15 @@ for size in $DISK_SIZE ; do
 			_tmpDevName="scsihw${i_scsi}"
 			TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=${_tmpDevName},bus=pcie.0,addr=0x$( printf "%02x\n" "$(( i_scsi+24 ))" )'"
 		fi
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-scsi${i_scsi},format=${diskformat_},${DISK_OPT_DRV}'"
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'scsi-hd,bus=${_tmpDevName}.0,channel=0,scsi-id=0,lun=${i_scsi},drive=drive-scsi${i_scsi},id=scsi${i_scsi},${DISK_OPT_DEV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-scsi${i_scsi},format=${diskformat_}${DISK_OPTS_DRV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'scsi-hd,bus=${_tmpDevName}.0,channel=0,scsi-id=0,lun=${i_scsi},drive=drive-scsi${i_scsi},id=scsi${i_scsi}${DISK_OPTS_DEV}'"
 		
 		# TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'nvme,drive=drive-scsi${i_scsi},serial=nvme-${i_scsi},id=nvme${i_scsi}'"
 		# serial=VH000${i_scsi}
 		((++i_scsi))
 	else
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-sata${i_sata},format=${diskformat_},${DISK_OPT_DRV}'"
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-sata${i_sata},id=sata${i_sata},${DISK_OPT_DEV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-sata${i_sata},format=${diskformat_}${DISK_OPTS_DRV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-sata${i_sata},id=sata${i_sata}${DISK_OPTS_DEV}'"
 		((++i_sata))
 	fi
 done
@@ -348,13 +359,13 @@ SMP=$(($CORES*$THREADS))
 # Set 9p
 # ######################################
 : ${KVM_9P:=""}
-if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && [[ "${VM_ENABLE_9P}" == [Yy1]* ]] && [[ "x${VM_PATH_9P}" != "x" ]]; then 
+if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && [[ "${VM_ENABLE_9P}" == [Yy1]* ]] && [[ "x${VM_9P_PATH}" != "x" ]]; then 
 	log "INFO" "Adding 9p sharefolders ..."
 
 	i=0
-	for path_ in $VM_PATH_9P ; do
+	for path_ in $VM_9P_PATH ; do
 		log "INFO" "... path=${path_} , mount_tag=hostdata${i}"
-		KVM_9P="${KVM_9P} -fsdev local,security_model=passthrough,id=fsdev-fs${i},path=${path_} -device virtio-9p-pci,id=fs${i},fsdev=fsdev-fs${i},mount_tag=hostdata${i},bus=pcie.0"
+		KVM_9P="${KVM_9P} -fsdev ${VM_9P_OPTS},id=fsdev-fs${i},path=${path_} -device virtio-9p-pci,id=fs${i},fsdev=fsdev-fs${i},mount_tag=hostdata${i},bus=pcie.0"
 		((++i))
 	done
 fi
@@ -388,7 +399,7 @@ KVM_NET_OPTS="-netdev tap,ifname=vm-nat,script=no,downscript=no,id=hostnet0"
 #KVM_NET_OPTS="-netdev user,hostfwd=tcp:127.0.0.1:5000-:5000"
 [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] \
 	&& KVM_NET_OPTS="${KVM_NET_OPTS} -device virtio-net-pci,netdev=hostnet0,mac=$VM_MAC,id=net0" \
-	|| KVM_NET_OPTS="${KVM_NET_OPTS} -device e1000,netdev=hostnet0,mac=$VM_MAC,id=net0"
+	|| KVM_NET_OPTS="${KVM_NET_OPTS} -device e1000e,netdev=hostnet0,mac=$VM_MAC,id=net0"
 
 
 # Hack for guest VMs complaining about "bad udp checksums in 5 packets"
@@ -421,7 +432,7 @@ $DNSMASQ $DNSMASQ_OPTS
 # Launching Qemu VM command
 # ######################################
 log "INFO" "Launching qemu-kvm ..."
-COMMAND="$LAUNCHER $KVM_OPTS ${KVM_PREBOOT} $KVM_SYNOBOOT $KVM_BLK_OPTS $KVM_VIDEO_OPTS $KVM_CPU_OPTS $KVM_NET_OPTS $KVM_9P $VM_CUSTOM_OPTS $@"
+COMMAND="$LAUNCHER ${KVM_OPTS} ${KVM_PREBOOT} ${KVM_SYNOBOOT} ${KVM_BLK_OPTS} ${KVM_VIDEO_OPTS} ${KVM_CPU_OPTS} ${KVM_NET_OPTS} ${KVM_9P} ${VM_CUSTOM_OPTS} $@"
 log "DEBUG" "${COMMAND}"
 trap '/usr/bin/vm-power-down' SIGTERM
 trap '/usr/bin/vm-power-down' SIGINT
