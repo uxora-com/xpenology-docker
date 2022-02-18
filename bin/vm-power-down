@@ -1,8 +1,9 @@
 #!/bin/bash
 
-: ${VM_TIMEOUT_POWERDOWN:='10'}
+: ${VM_TIMEOUT_POWERDOWN:='30'}
 
 echo "INFO: Shutting down VM..."
+echo "INFO: ... Waiting for ${VM_TIMEOUT_POWERDOWN}s before FORCE QUIT! Please wait!"
 processID=$(cat /run/qemu.pid)
 
 #Gracefull stop via power button
@@ -18,12 +19,12 @@ do
 done
 
 [[ -e /proc/$processID ]] \
-	&& echo "WARNING: Timeout reached, force quit vm ..." \
+	&& echo "WARNING: Timeout reached, FORCE QUIT vm ..." \
 	&& echo quit | nc -Uw1 /run/qemu-monitor.sock
 
 sleep 1
 [[ -e /proc/$processID ]] \
-	&& echo "WARNING: Timeout reached, killing vm ..." \
+	&& echo "WARNING: Timeout reached, KILLING vm ..." \
 	&& kill -9 $processID
 
 #Delete pid file
