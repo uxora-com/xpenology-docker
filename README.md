@@ -85,16 +85,14 @@ $ docker run --privileged \
 	uxora/xpenology
 
 # Run with more specific parameters
-$ docker run --name="xpenodock" --hostname="xpenodock" \ 
+$ docker run --name="xpenodock" --hostname="xpenodock" \
 	--privileged --cap-add=NET_ADMIN \
 	--device=/dev/net/tun --device=/dev/kvm \
 	-p 5000-5001:5000-5001 -p 2222:22 -p 8080:80 \
 	-e CPU="qemu64" -e THREADS=1 -e RAM=512 \
-	-e DISK_SIZE="8G 16G" \
-	-e DISK_PATH="/xpy/diskvm" \
-	-e VM_PATH_9P="/xpy/share9p /xpy/diskvm" \
-	-e VM_ENABLE_VIRTIO="Y" \
-	-e BOOTLOADER_AS_USB="Y" \
+	-e DISK_SIZE="8G 16G" -e DISK_PATH="/xpy/diskvm" \
+	-e VM_ENABLE_9P="Y" -e VM_PATH_9P="/xpy/share9p" \
+	-e BOOTLOADER_AS_USB="Y" -e VM_ENABLE_VIRTIO="Y" \
 	-e BOOTLOADER_URL="http://192.168.0.14/path/synoboot.zip" \
 	-e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
 	-v /xpenodock/data:/xpy/share9p \
@@ -107,6 +105,8 @@ Note0: For full disk passtrough, check tutorial here: https://www.uxora.com/othe
 Note1: If you do not want to use BOOTLOADER_URL, copy it as "bootloader.img" to DISK_PATH. In our 2nd example, bootloader should be copied to "/xpenodock/kvm/bootloader.img".
 
 Note2: After successfully running this container, you will be able to access the DSM WebUI with docker HOST_IP and port 5000 (ie. 192.168.1.25:5000).
+
+Note3: Log file is stored in `DISK_PATH/log`
 
 ## Variables
 
@@ -122,10 +122,12 @@ Multiples environment variables can be modified to alter default runtime.
 	* It is now possible to pass the full disk device  (ie. DISK_SIZE="8G /dev/sdc")
 
 * DISK_FORMAT: (Default "qcow2") Type of disk format (qcow2 support snapshot), check [here](https://en.wikibooks.org/wiki/QEMU/Images) for more details.
-* DISK_CACHE: (DEPRECATED) Replace by DISK_OPTS_DRV, check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
-* DISK_OPTS_DRV: (Default "cache=writeback,discard=on,aio=threads,detect-zeroes=on") Additional option for disk drive. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
-* DISK_OPTS_DEV: (Default "rotation_rate=1") Additional option for disk device. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
-* DISK_PATH: (Default "/image") Directory path where disk image (and bootloader) will be stored
+* DISK_CACHE: (DEPRECATED) Replace by DISK_OPTS_DRV.
+* DISK_OPTS_DRV: (Default "cache=writeback,discard=on,aio=threads,detect-zeroes=on")
+	* Additional option for disk drive. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
+* DISK_OPTS_DEV: (Default "rotation_rate=1")
+	* Additional option for disk device. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
+* DISK_PATH: (Default "/xpy/diskvm") Directory path where disk image (and bootloader) will be stored
 
 * BOOTLOADER_URL: (Default "") URL web link of the bootloader (ie. "http://host/path/bootloader.img")
 	* It can be raw, zip, gzip or tgz file.
@@ -137,15 +139,18 @@ Multiples environment variables can be modified to alter default runtime.
 
 * VM_ENABLE_VGA: (Default "No") Enabling qxl vga and vnc. Not needed for Xpenology.
 * VM_ENABLE_VIRTIO: (Default "Yes") Enabling virtio disk. Make sure that bootloader has virtio drivers.
-* VM_ENABLE_VIRTIO_SCSI: (Default "No") Enabling virtio scsi disk. Make sure that bootloader has virtio drivers. Need VM_ENABLE_VIRTIO enabled.
-* VM_ENABLE_9P: (Default "Yes") Enabling virtio 9p mount point. Need VM_ENABLE_VIRTIO enabled.
-* VM_PATH_9P: (Default "/datashare") Directories path of 9p mount point to be shared with xpenology
+* VM_ENABLE_VIRTIO_SCSI: (Default "No") Enabling virtio scsi disk. Make sure that bootloader has virtio drivers.
+	* Need VM_ENABLE_VIRTIO enabled.
+	* Use "S" value for Virtio SCSI Single.
+* VM_ENABLE_9P: (Default "No") Enabling virtio 9p mount point. Need VM_ENABLE_VIRTIO enabled.
+* VM_PATH_9P: (Default "/xpy/share9p") Directories path of 9p mount point to be shared with xpenology
 	* Need VM_ENABLE_9P enabled and -v docker option (ie. -v /xpenodock/data:/xpy/share9p)
 	* Can set multiple values separated by space (ie. -e VM_PATH_9P="/xpy/share9p /xpy/diskvm")
 	* For each value, it will be associated to 9p mount point tag "hostdata0", "hostdata1", ...
+* VM_9P_OPTS: (Default "local,security_model=passthrough") 9p fsdev options. 
 * VM_CUSTOM_OPTS: (Default "") Additionnal custom option to add to the launcher qemu command line
 
-* VM_TIMEOUT_POWERDOWN: (Default "30") Timeout for vm-powerdown command
+* VM_TIMEOUT_POWERDOWN: (Default "30") Timeout for vm-power-down command
 
 * GRUBCFG_VID: (Default "46f4") VendorID of bootloader disk.
 * GRUBCFG_PID: (Default "0001") ProductID of bootloader disk.
@@ -195,17 +200,12 @@ And follow [this tutorial](https://xpenology.club/compile-drivers-xpenology-with
 ### Recommended setup (without BOOTLOADER_URL)
 
 ```bash
-# To avoid ip_tables error on docker
-$ modprobe ip_tables
-
-# Create directories structure
-$ mkdir -vp /xpenodock/{data,syst,slnk}
-
 # Copy bootloader
 $ cp synoboot_103b_ds3615xs_virtio_9p.img /xpenodock/kvm/bootloader.img
 
 # Run xpenology docker (Warning: fake SN which need to be changed)
-$ docker run --privileged --cap-add=NET_ADMIN \
+$ docker run --name="xpenodock" --hostname="xpenodock" \
+    --privileged --cap-add=NET_ADMIN \
     --device=/dev/net/tun --device=/dev/kvm \
     -p 5000-5001:5000-5001 -p 2222:22 -p 8080:80 \
     -p 137-139:137-139 -p 445:445 \
@@ -246,10 +246,11 @@ Then access it by `\\HOST_IP`.
 If you want to access by name, you will have to add it on `hosts` file of your machine.
 
 ### Changing container parameters
-```
-CAUTION:
-	DOES NOT do that if your vm disks are stored inside the container !!!
-	Changing container/bootloader does not affect your dsm xpenology data if your vm disk is stored outside the container with -v option (ie. "-e DISK_PATH="/xpy/diskvm" -v /xpenodock/kvm:/xpy/diskvm"). You should get it back the same xpenology as before as long as it uses the same vm disks even with a different working bootloader.
+CAUTION: Most important files are vm disks. As long as you keep it safe, you should be able to get back your xpenology.
+* If you used `-v` option to mount host directory to `DISK_PATH` as `-e DISK_PATH="/xpy/diskvm" -v /xpenodock/kvm:/xpy/diskvm`
+	- You should get all your bootloader and vm disks in /xpenodock/kvm
+* If you didn't use -v option, then it uses docker volume on `DISK_PATH`
+	- You should find bootloader and kvm disks on a directory like : `/var/lib/docker/volumes/[...]/_data/` 
 ```
 
 If you need to change a bootloader parameter (VM_MAC and GRUBCFG_*):
@@ -258,7 +259,7 @@ If you need to change a bootloader parameter (VM_MAC and GRUBCFG_*):
 - Then follow instructions below for others parameters
 
 Otherwise for all others parameters :
-- If you want, delete old container: `$ docker container rm $( docker container ls -qf 'ancestor=uxora/xpenology' )`
+- Delete or Rename your old container: `$ docker container rm $( docker container ls -qf 'ancestor=uxora/xpenology' )`
 - Then recreate a container with new parameters: `$ docker run --privileged [...]`
 
 ## TroubleShooting
