@@ -95,14 +95,14 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
 	-e BOOTLOADER_AS_USB="Y" -e VM_ENABLE_VIRTIO="Y" \
 	-e BOOTLOADER_URL="http://192.168.0.14/path/synoboot.zip" \
 	-e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
-	-v /xpenodock/data:/xpy/share9p \
-	-v /xpenodock/kvm:/xpy/diskvm \
+	-v /host_dir/data:/xpy/share9p \
+	-v /host_dir/kvm:/xpy/diskvm \
 	uxora/xpenology
 ```
 
 Note0: For full disk passtrough, check tutorial here: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
 
-Note1: If you do not want to use BOOTLOADER_URL, copy it as "bootloader.img" to DISK_PATH. In our 2nd example, bootloader should be copied to "/xpenodock/kvm/bootloader.img".
+Note1: If you do not want to use BOOTLOADER_URL, copy it as "bootloader.img" to DISK_PATH. In our 2nd example, bootloader should be copied to "/host_dir/kvm/bootloader.img".
 
 Note2: After successfully running this container, you will be able to access the DSM WebUI with docker HOST_IP and port 5000 (ie. 192.168.1.25:5000).
 
@@ -111,10 +111,12 @@ Note3: Log file is stored in `DISK_PATH/log`
 ## Variables
 
 Multiples environment variables can be modified to alter default runtime.
+
 * CPU: (Default "qemu64") type of cpu
 * THREADS: (Default "1") number of cpu threads per core
 * CORES: (Default "1") number of cpu cores
 * RAM: (Default "512") number of ram memory in MB
+
 
 * DISK_SIZE:(Default "16") Size of virtual disk in GB
 	* Set DISK_SIZE=0, if you don't want to have a virtual disk
@@ -129,32 +131,41 @@ Multiples environment variables can be modified to alter default runtime.
 	* Additional option for disk device. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
 * DISK_PATH: (Default "/xpy/diskvm") Directory path where disk image (and bootloader) will be stored
 
+
 * BOOTLOADER_URL: (Default "") URL web link of the bootloader (ie. "http://host/path/bootloader.img")
 	* It can be raw, zip, gzip or tgz file.
 	* If "bootloader.img" file already exists in DISK_PATH, then it skips BOOTLOADER_URL download.
 * BOOTLOADER_AS_USB: (Default "Y") Boot the bootloader as USB or as Disk
 
+
 * VM_IP: (Default "20.20.20.21") Assigned IP for VM DHCP. Don't need to be changed. 
 * VM_MAC: (Default "00:11:32:2C:A7:85") Mac address use for VM DHCP to assigne VM_IP. This need to match MAC set in xpenology grub bootloader. 
+
 
 * VM_ENABLE_VGA: (Default "No") Enabling qxl vga and vnc. Not needed for Xpenology.
 * VM_ENABLE_VIRTIO: (Default "Yes") Enabling virtio disk. Make sure that bootloader has virtio drivers.
 * VM_ENABLE_VIRTIO_SCSI: (Default "No") Enabling virtio scsi disk. Make sure that bootloader has virtio drivers.
-	* Need VM_ENABLE_VIRTIO enabled.
+	* VM_ENABLE_VIRTIO auto enabled.
 	* Use "S" value for Virtio SCSI Single.
+
+
 * VM_ENABLE_9P: (Default "No") Enabling virtio 9p mount point. Need VM_ENABLE_VIRTIO enabled.
-* VM_PATH_9P: (Default "/xpy/share9p") Directories path of 9p mount point to be shared with xpenology
-	* Need VM_ENABLE_9P enabled and -v docker option (ie. -v /xpenodock/data:/xpy/share9p)
+* VM_9P_PATH: (Default "") Directories path of 9p mount point to be shared with xpenology
+	* VM_ENABLE_9P auto enabled
 	* Can set multiple values separated by space (ie. -e VM_PATH_9P="/xpy/share9p /xpy/diskvm")
 	* For each value, it will be associated to 9p mount point tag "hostdata0", "hostdata1", ...
+	* Use with -v docker option for each value (ie. -v /host_dir/data:/xpy/share9p)
 * VM_9P_OPTS: (Default "local,security_model=passthrough") 9p fsdev options. 
 * VM_CUSTOM_OPTS: (Default "") Additionnal custom option to add to the launcher qemu command line
 
 * VM_TIMEOUT_POWERDOWN: (Default "30") Timeout for vm-power-down command
 
-* GRUBCFG_VID: (Default "46f4") VendorID of bootloader disk.
-* GRUBCFG_PID: (Default "0001") ProductID of bootloader disk.
+
+* GRUBCFG_AUTO: (Default "Y") Auto set GRUBCFG_VID/GRUBCFG_PID if empty, depending on BOOTLOADER_AS_USB value.
+* GRUBCFG_VID: (Default "") VendorID of bootloader disk.
+* GRUBCFG_PID: (Default "") ProductID of bootloader disk.
 * GRUBCFG_SN: (Default "") Serial number of DSM.
+
 
 * GRUBCFG_DISKIDXMAP: (Default "")
 * GRUBCFG_SATAPORTMAP: (Default "")
@@ -202,7 +213,7 @@ And follow [this tutorial](https://xpenology.club/compile-drivers-xpenology-with
 
 ```bash
 # Copy bootloader
-$ cp synoboot_103b_ds3615xs_virtio_9p.img /xpenodock/kvm/bootloader.img
+$ cp synoboot_103b_ds3615xs_virtio_9p.img /host_dir/kvm/bootloader.img
 
 # Run xpenology docker (Warning: fake SN which need to be changed)
 $ docker run --name="xpenodock" --hostname="xpenodock" \
@@ -214,7 +225,7 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
     -e GRUBCFG_SN="1234ABC012345" \
     -e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
     -e DISK_PATH="/xpy/diskvm" -e VM_PATH_9P="/xpy/share9p" \
-    -v /xpenodock/kvm:/xpy/diskvm -v /xpenodock/data:/xpy/share9p \
+    -v /host_dir/kvm:/xpy/diskvm -v /host_dir/data:/xpy/share9p \
     uxora/xpenology
 ```
 
@@ -248,14 +259,14 @@ If you want to access by name, you will have to add it on `hosts` file of your m
 
 ### Changing container parameters
 CAUTION: Most important files are vm disks. As long as you keep it safe, you should be able to get back your xpenology.
-* If you used `-v` option to mount host directory to `DISK_PATH` as `-e DISK_PATH="/xpy/diskvm" -v /xpenodock/kvm:/xpy/diskvm`
-	- You should get all your bootloader and vm disks in /xpenodock/kvm
+* If you used `-v` option to mount host directory to `DISK_PATH` as `-e DISK_PATH="/xpy/diskvm" -v /host_dir/kvm:/xpy/diskvm`
+	- You should get all your bootloader and vm disks in /host_dir/kvm
 * If you didn't use -v option, then it uses docker volume on `DISK_PATH`
 	- You should find bootloader and kvm disks on a directory like : `/var/lib/docker/volumes/[...]/_data/` 
 ```
 
 If you need to change a bootloader parameter (VM_MAC and GRUBCFG_*):
-- In DISK_PATH (ie. `/xpenodock/kvm`) folder, uncompress : `$ tar -xzf bootloader.img.tar.gz`
+- In DISK_PATH (ie. `/host_dir/kvm`) folder, uncompress : `$ tar -xzf bootloader.img.tar.gz`
 - Then delete: `$ rm bootloader.img.tar.gz bootloader.qcow2`
 - Then follow instructions below for others parameters
 
