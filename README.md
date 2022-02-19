@@ -155,7 +155,7 @@ Multiples environment variables can be modified to alter default runtime.
 	* Can set multiple values separated by space (ie. -e VM_PATH_9P="/xpy/share9p /xpy/diskvm")
 	* For each value, it will be associated to 9p mount point tag "hostdata0", "hostdata1", ...
 	* Use with -v docker option for each value (ie. -v /host_dir/data:/xpy/share9p)
-* VM_9P_OPTS: (Default "local,security_model=passthrough") 9p fsdev options. 
+* VM_9P_OPTS: (Default "local,security_model=passthrough") 9p fsdev options. Check [here](https://wiki.qemu.org/Documentation/9psetup) for more details.
 * VM_CUSTOM_OPTS: (Default "") Additionnal custom option to add to the launcher qemu command line
 
 * VM_TIMEOUT_POWERDOWN: (Default "30") Timeout for vm-power-down command
@@ -250,6 +250,8 @@ $ sudo chown -R :users /volume1/datashare9p
 $ sudo chmod -R g+rw /volume1/datashare9p
 ```
 
+Check https://www.kernel.org/doc/Documentation/filesystems/9p.txt for 9p mount options (and set VM_9P_OPTS that suit you the best).
+	
 If you want automount 9p folder at boot time, use "Control Panel > Task Scheduler > Create > Triggered Task" to set this command line as root schedule task.
 
 ### SAMBA
