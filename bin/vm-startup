@@ -1,5 +1,8 @@
 #!/bin/bash
 set -e
+mkdir -p ${DISK_PATH}/log ${VM_9P_PATH}
+exec &> >(tee -a ${DISK_PATH}/log/xpenodock$(date "+_%Y%m%d_%H%M%S").log)
+
 # This entrypoint for KVM container configures and attaches network bridges to
 # the VM and starts KVM with the selected options.
 
@@ -11,41 +14,41 @@ set -e
 : ${QEMU_CONF_DIR:='/etc/qemu-kvm'}
 : ${DISABLE_VGA:='Y'}
 
-: ${CPU:='host'}
+: ${CPU:='qemu64'}
 : ${THREADS:='1'}
 : ${CORES:='1'}
 : ${RAM:='2048'}
 
 : ${DISK_SIZE:='16'}
 : ${DISK_FORMAT:='qcow2'}
-: ${DISK_CACHE:='none'}
-: ${DISK_OPT_DRV:='cache=writeback,discard=on,aio=threads,detect-zeroes=on'}
-: ${DISK_OPT_DEV:='rotation_rate=1'}
-: ${DISK_PATH:='/image'}
+: ${DISK_OPTS_DRV:='cache=writeback,discard=on,aio=threads,detect-zeroes=on'}
+: ${DISK_OPTS_DEV:='rotation_rate=1'}
+: ${DISK_PATH:='/xpy/diskvm'}
 
 : ${VM_IP:="20.20.20.21"}
 : ${VM_MAC:="00:11:32:2C:A7:85"}
 
 : ${VM_ENABLE_VIRTIO:="Y"}
 : ${VM_ENABLE_VIRTIO_SCSI:="N"}
-: ${VM_ENABLE_9P:="Y"}
+: ${VM_ENABLE_9P:="N"}
 : ${VM_ENABLE_VGA:="N"}
 
-: ${VM_PATH_9P:=''}
+: ${VM_9P_PATH:=''}
+: ${VM_9P_OPTS:='local,security_model=passthrough'}
 : ${VM_CUSTOM_OPTS:=''}
 
 : ${BOOTLOADER_URL:='http://host/path/bootloader.img'}
 : ${BOOTLOADER_AS_USB:='Y'}
 
-: ${GRUBCFG_VID:='46f4'}
-: ${GRUBCFG_PID:='0001'}
+: ${GRUBCFG_AUTO:='Y'}
+: ${GRUBCFG_VID:=''}
+: ${GRUBCFG_PID:=''}
 : ${GRUBCFG_SN:=''}
-: ${GRUBCFG_MAC1:=''}
 : ${GRUBCFG_DISKIDXMAP:=''}
 : ${GRUBCFG_SATAPORTMAP:=''}
 : ${GRUBCFG_SASIDXMAP:=''}
 : ${GRUBCFG_HDDHOTPLUG:=''}
-
+: ${GRUBCFG_MAC1:=''}
 
 : ${DEBUG:='Y'}
 
@@ -125,9 +128,15 @@ ddReplaceInFile () {
 	if [[ "x${_tmpRes}" != "x" ]]; then
 		for i in ${_tmpRes}; do
 			_tmpCnt="$( printf ${i#*:} | wc -c )"
-			[[ ${#_tmpStr} -ne ${_tmpCnt} ]] && [[ ${_tmpMode} -eq 0 ]] \
+			
+			[[ ${_tmpMode} -eq 0 ]] && [[ ${#_tmpStr} -ne ${_tmpCnt} ]] \
 				&& log "WARNING" "... Nb of char is not equal: ${#_tmpStr} =/= ${i#*:}" && continue
+			
+			[[ "x${_tmpStr}" == "x${i#*:}" ]] \
+				&& log "INFO" "... No need to change: value is the same!" && continue
+			
 			printf "%-${_tmpCnt}s" "${_tmpStr}" | dd of=${_tmpFile} conv=notrunc bs=1 seek=${i%:*} count=${_tmpCnt} >/dev/null 2>&1
+			
 			[[ $( grep -oba "${_tmpStr}" ${_tmpFile} | wc -l ) -gt 0 ]] \
 				&& log "INFO" "... Successful replacement of: ${i#*:}" \
 				|| log "WARNING" "... Unsuccessful: Reason unknown!"
@@ -143,15 +152,30 @@ ddReplaceInFile () {
 # ######################################
 # ######################################
 
-log "INFO" "Xpenology docker is starting ..."
+log "INFO" "Xpenology docker V${SCRIPT_VERSION} is starting [pid:${$}] ..."
 
-mkdir -p ${DISK_PATH}
+# DEPRECATED
+[[ "x${VM_PATH_9P}" != "x" ]] \
+	&& log "ERROR" "VM_PATH_9P is deprecated! Use VM_9P_PATH instead." && exit 2
+[[ "x${DISK_CACHE}" != "x" ]] \
+	&& log "ERROR" "DISK_CACHE is deprecated! Use DISK_OPTS_DRV instead." && exit 3
 
 # Patch
 # ######################################
 log "INFO" "Little dirty trick ..."
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+
+
+if [[ "${GRUBCFG_AUTO}" == [Yy1]* ]] && [[ "x${GRUBCFG_VID}" == "x" ]] && [[ "x${GRUBCFG_PID}" == "x" ]]; then
+	[[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]] && GRUBCFG_VID='46f4' && GRUBCFG_PID='0001'
+fi
+
+[[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]] && VM_ENABLE_VIRTIO="Y"
+[[ "x${VM_9P_PATH}" != "x" ]] && VM_ENABLE_9P="Y"
+
+[[ "x${DISK_OPTS_DRV}" != "x" ]] && DISK_OPTS_DRV=",${DISK_OPTS_DRV#,}"
+[[ "x${DISK_OPTS_DEV}" != "x" ]] && DISK_OPTS_DEV=",${DISK_OPTS_DEV#,}"
 
 # Download and check synoboot bootloader
 # ######################################
@@ -161,16 +185,16 @@ BOOTLOADER_BAK_EXT=".tar.gz"
 
 flag_bootl_err=0
 if [[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] ; then
-	log "INFO" "Skip URL download, raw bootloader already exist: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ."
-	log "INFO" "${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} exists, skipping grub.cfg modification"
+	log "INFO" "SKIP download URL: gzip bootloader already exist: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
+	log "INFO" "SKIP grub.cfg modification: gzip bootloader already exist: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
 	flag_bootl_err=1
 elif [[ -f ${BOOTLOADER_FULLPATH} ]] ; then
-	log "INFO" "Skip URL download, raw bootloader already exist: ${BOOTLOADER_FULLPATH} ."
+	log "INFO" "SKIP download URL: raw bootloader already exist: ${BOOTLOADER_FULLPATH}"
 else
 	log "INFO" "Start downloading bootloader from URL: ${BOOTLOADER_URL} ..."
 	wget --no-check-certificate -q --show-progress --progress=dot:giga ${BOOTLOADER_URL} -O ${BOOTLOADER_FULLPATH}.tmp \
-		&& echo "" && log "INFO" "Bootloader has been successfully downloaded from URL." \
-		|| ( log "ERROR" "Bootloader cannot be downloaded from URL." && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 10 )
+		&& echo "" && log "INFO" "... SUCCESS: file downloaded from URL." \
+		|| ( log "ERROR" "... FAILED: file cannot be downloaded from URL." && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 10 )
 
 	if [[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c ": gzip" ) -eq 1 ]]; then
 		log "INFO" "Downloaded file is detected as gzip file, extracting ..."
@@ -217,12 +241,13 @@ fi
 
 # Convert bootloader to other format (only qcow2 for now)
 if [[ ${DISK_FORMAT} == "qcow2" ]]; then
+	log "INFO" "Bootloader convertion ..."
 	if [[ ! -f ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT} ]]; then
 		qemu-img convert -f raw -O ${DISK_FORMAT} ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT} \
-			&& log "INFO" "Bootloader has been converted to ${DISK_FORMAT}" \
-			|| ( log "ERROR" "Cannot convert Bootloader to ${DISK_FORMAT}. Exiting." && exit 20 )
+			&& log "INFO" "... SUCCESS: Bootloader has been converted to ${DISK_FORMAT}: ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}" \
+			|| ( log "ERROR" "... FAILED: Cannot convert Bootloader to ${DISK_FORMAT}. Exiting." && exit 20 )
 	else
-		log "INFO" "Skip bootloader ${DISK_FORMAT} convertion, because it already exist."
+		log "INFO" "... SKIP: bootloader ${DISK_FORMAT} already exists: ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}"
 	fi
 	
 	# delete img bootloader if bak exist
@@ -243,15 +268,18 @@ KVM_PREBOOT="${KVM_PREBOOT} -device 'ahci,id=ahci0,multifunction=on,bus=pcie.0,a
 if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 	log "INFO" "Adding snapshot disk ... "
 	fpath_diskname_="${DISK_PATH%/}/vm-disk-snapshot.${DISK_FORMAT}"
-	[[ ! -f ${fpath_diskname_} ]] \
-		&& qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} 8M \
-		&& log "INFO" "... new snapshot disk created" \
-		|| log "INFO" "... SKIP: snapshot disk already exists"
-	KVM_PREBOOT="${KVM_PREBOOT} -drive 'file=${fpath_diskname_},if=none,id=drive-disk-snap,format=${DISK_FORMAT},${DISK_OPT_DRV}'"
+	if [[ ! -f ${fpath_diskname_} ]]; then
+		qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} 8M \
+		  && log "INFO" "... SUCCESS: snapshot disk created: ${fpath_diskname_}" \
+		  || log "ERROR" "... FAILED: Cannot create snapshot disk"
+	else
+		log "INFO" "... SKIP: snapshot disk already exists: ${fpath_diskname_}"
+	fi
+	KVM_PREBOOT="${KVM_PREBOOT} -drive 'file=${fpath_diskname_},if=none,id=drive-disk-snap,format=${DISK_FORMAT}${DISK_OPTS_DRV}'"
 	if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]]; then
 		KVM_PREBOOT="${KVM_PREBOOT} -device 'virtio-blk-pci,drive=drive-disk-snap,id=virtio-disk-snap,bus=pcie.0,addr=0x4'"
 	else
-		KVM_PREBOOT="${KVM_PREBOOT} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-snap,id=sata-disk-snap'"
+		KVM_PREBOOT="${KVM_PREBOOT} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-disk-snap,id=sata-disk-snap'"
 		((++i_sata))
 	fi
 fi
@@ -260,7 +288,7 @@ fi
 # ######################################
 log "INFO" "Adding bootloader as $([[ ${BOOTLOADER_AS_USB} == [Yy1]* ]] && echo "USB" || echo "SATA") ..."
 KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'nec-usb-xhci,id=usb-bus0,multifunction=on'"
-KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-disk-bootloader,cache=${DISK_CACHE},aio=native,detect-zeroes=on'"
+KVM_SYNOBOOT="${KVM_SYNOBOOT} -drive 'file=${BOOTLOADER_FULLPATH},format=${BOOTLOADER_FULLPATH##*.},if=none,id=drive-disk-bootloader${DISK_OPTS_DRV}'"
 
 if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]]; then
 	KVM_SYNOBOOT="${KVM_SYNOBOOT} -device 'usb-storage,bus=usb-bus0.0,port=1,drive=drive-disk-bootloader,id=usb-disk-bootloader,bootindex=1,removable=on'"
@@ -272,11 +300,10 @@ fi
 
 # Add SATA disks
 # ######################################
-log "INFO" "Adding disk(s)  ..."
+log "INFO" "Adding vm disk(s)  ..."
 TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS}"
 fpath_diskname_=""
 diskformat_=""
-
 
 i=0
 i_scsi=0
@@ -290,16 +317,16 @@ for size in $DISK_SIZE ; do
 		diskformat_="${DISK_FORMAT}"
 		fpath_diskname_="${DISK_PATH%/}/vm-disk-data${i}.${diskformat_}"
 		if [[ ! -f ${fpath_diskname_} ]]; then
-			log "INFO" "... No Initial Disk found, creating disk : ${fpath_diskname_}"
 			qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} ${size%[Gg]}G \
-				|| (log "ERROR" "... FAILED creating disk : ${fpath_diskname_}" && exit 13)
+				&& log "INFO" "... SUCCESS: ${DISK_FORMAT} disk created: ${fpath_diskname_}" \
+				|| (log "ERROR" "... FAILED: Cannot create disk" && exit 13)
 		else
-			log "INFO" "... Disk already exists, SKIP creating disk : ${fpath_diskname_}"
+			log "INFO" "... SKIP: ${DISK_FORMAT} disk already exists: ${fpath_diskname_}"
 		fi
 		((++i))
 	else
-		log "WARNING" "... invalid argument : $size"	
-		continue
+		log "ERROR" "... ARG: invalid argument : $size"	
+		exit 30
 	fi
 	
 	if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [YySs12]* ]]; then
@@ -307,15 +334,15 @@ for size in $DISK_SIZE ; do
 			_tmpDevName="scsihw${i_scsi}"
 			TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'virtio-scsi-pci,id=${_tmpDevName},bus=pcie.0,addr=0x$( printf "%02x\n" "$(( i_scsi+24 ))" )'"
 		fi
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-scsi${i_scsi},format=${diskformat_},${DISK_OPT_DRV}'"
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'scsi-hd,bus=${_tmpDevName}.0,channel=0,scsi-id=0,lun=${i_scsi},drive=drive-scsi${i_scsi},id=scsi${i_scsi},${DISK_OPT_DEV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-scsi${i_scsi},format=${diskformat_}${DISK_OPTS_DRV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'scsi-hd,bus=${_tmpDevName}.0,channel=0,scsi-id=0,lun=${i_scsi},drive=drive-scsi${i_scsi},id=scsi${i_scsi}${DISK_OPTS_DEV}'"
 		
 		# TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'nvme,drive=drive-scsi${i_scsi},serial=nvme-${i_scsi},id=nvme${i_scsi}'"
 		# serial=VH000${i_scsi}
 		((++i_scsi))
 	else
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-sata${i_sata},format=${diskformat_},${DISK_OPT_DRV}'"
-		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-sata${i_sata},id=sata${i_sata},${DISK_OPT_DEV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -drive 'file=${fpath_diskname_},if=none,id=drive-sata${i_sata},format=${diskformat_}${DISK_OPTS_DRV}'"
+		TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS} -device 'ide-hd,bus=ahci0.${i_sata},drive=drive-sata${i_sata},id=sata${i_sata}${DISK_OPTS_DEV}'"
 		((++i_sata))
 	fi
 done
@@ -348,13 +375,13 @@ SMP=$(($CORES*$THREADS))
 # Set 9p
 # ######################################
 : ${KVM_9P:=""}
-if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && [[ "${VM_ENABLE_9P}" == [Yy1]* ]] && [[ "x${VM_PATH_9P}" != "x" ]]; then 
+if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && [[ "${VM_ENABLE_9P}" == [Yy1]* ]] && [[ "x${VM_9P_PATH}" != "x" ]]; then 
 	log "INFO" "Adding 9p sharefolders ..."
 
 	i=0
-	for path_ in $VM_PATH_9P ; do
+	for path_ in $VM_9P_PATH ; do
 		log "INFO" "... path=${path_} , mount_tag=hostdata${i}"
-		KVM_9P="${KVM_9P} -fsdev local,security_model=passthrough,id=fsdev-fs${i},path=${path_} -device virtio-9p-pci,id=fs${i},fsdev=fsdev-fs${i},mount_tag=hostdata${i},bus=pcie.0"
+		KVM_9P="${KVM_9P} -fsdev ${VM_9P_OPTS},id=fsdev-fs${i},path=${path_} -device virtio-9p-pci,id=fs${i},fsdev=fsdev-fs${i},mount_tag=hostdata${i},bus=pcie.0"
 		((++i))
 	done
 fi
@@ -388,7 +415,7 @@ KVM_NET_OPTS="-netdev tap,ifname=vm-nat,script=no,downscript=no,id=hostnet0"
 #KVM_NET_OPTS="-netdev user,hostfwd=tcp:127.0.0.1:5000-:5000"
 [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] \
 	&& KVM_NET_OPTS="${KVM_NET_OPTS} -device virtio-net-pci,netdev=hostnet0,mac=$VM_MAC,id=net0" \
-	|| KVM_NET_OPTS="${KVM_NET_OPTS} -device e1000,netdev=hostnet0,mac=$VM_MAC,id=net0"
+	|| KVM_NET_OPTS="${KVM_NET_OPTS} -device e1000e,netdev=hostnet0,mac=$VM_MAC,id=net0"
 
 
 # Hack for guest VMs complaining about "bad udp checksums in 5 packets"
@@ -421,7 +448,7 @@ $DNSMASQ $DNSMASQ_OPTS
 # Launching Qemu VM command
 # ######################################
 log "INFO" "Launching qemu-kvm ..."
-COMMAND="$LAUNCHER $KVM_OPTS ${KVM_PREBOOT} $KVM_SYNOBOOT $KVM_BLK_OPTS $KVM_VIDEO_OPTS $KVM_CPU_OPTS $KVM_NET_OPTS $KVM_9P $VM_CUSTOM_OPTS $@"
+COMMAND="$LAUNCHER ${KVM_OPTS} ${KVM_PREBOOT} ${KVM_SYNOBOOT} ${KVM_BLK_OPTS} ${KVM_VIDEO_OPTS} ${KVM_CPU_OPTS} ${KVM_NET_OPTS} ${KVM_9P} ${VM_CUSTOM_OPTS} $@"
 log "DEBUG" "${COMMAND}"
 trap '/usr/bin/vm-power-down' SIGTERM
 trap '/usr/bin/vm-power-down' SIGINT

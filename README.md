@@ -47,11 +47,11 @@ Personnal testing has been done with ds3615xs jun's loader 1.03b with virtio dri
 
 - Windows 10 docker (OK but Slow):
 	- Intel i7 cpu
-	- dsm 6.2.3 OK but very slow for loading bootloader
+	- dsm 6.2.3/7.0.1-42218 OK but very slow for loading bootloader
 
 - Proxmox VM Linux Debian 10 (OK):
 	- Nested virtualization all set and validated with virt-host-validate
-	- dsm 6.2.3/7.0.1-42218 OK, Live snapshot OK, 9p mount OK
+	- dsm 7.0.1-42218 OK, Live snapshot OK, 9p mount OK
 
 If you have any issue, please raise it in "issues" area.
 
@@ -85,38 +85,38 @@ $ docker run --privileged \
 	uxora/xpenology
 
 # Run with more specific parameters
-$ mkdir -vp /xpenodock/{syst,data}
-$ docker run --privileged --cap-add=NET_ADMIN \
+$ docker run --name="xpenodock" --hostname="xpenodock" \
+	--privileged --cap-add=NET_ADMIN \
 	--device=/dev/net/tun --device=/dev/kvm \
-	-p 5000:5000 -p 5001:5001 -p 2222:22 -p 8080:80 \
-	-e CPU="qemu64" \
-	-e THREADS=1 \
-	-e RAM=512 \
-	-e DISK_SIZE="8G 16G" \
-	-e DISK_PATH="/xpy_syst" \
-	-e VM_PATH_9P="/xpy_data /xpy_syst" \
-	-e VM_ENABLE_VIRTIO="Y" \
-	-e BOOTLOADER_AS_USB="Y" \
+	-p 5000-5001:5000-5001 -p 2222:22 -p 8080:80 \
+	-e CPU="qemu64" -e THREADS=1 -e RAM=512 \
+	-e DISK_SIZE="8G 16G" -e DISK_PATH="/xpy/diskvm" \
+	-e VM_ENABLE_9P="Y" -e VM_PATH_9P="/xpy/share9p" \
+	-e BOOTLOADER_AS_USB="Y" -e VM_ENABLE_VIRTIO="Y" \
 	-e BOOTLOADER_URL="http://192.168.0.14/path/synoboot.zip" \
 	-e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
-	-v /xpenodock/data:/xpy_data \
-	-v /xpenodock/syst:/xpy_syst \
+	-v /host_dir/data:/xpy/share9p \
+	-v /host_dir/kvm:/xpy/diskvm \
 	uxora/xpenology
 ```
 
 Note0: For full disk passtrough, check tutorial here: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
 
-Note1: If you do not want to use BOOTLOADER_URL, copy it as "bootloader.img" to DISK_PATH. In our 2nd example, bootloader should be copied to "/xpenodock/syst/bootloader.img".
+Note1: If you do not want to use BOOTLOADER_URL, copy it as "bootloader.img" to DISK_PATH. In our 2nd example, bootloader should be copied to "/host_dir/kvm/bootloader.img".
 
 Note2: After successfully running this container, you will be able to access the DSM WebUI with docker HOST_IP and port 5000 (ie. 192.168.1.25:5000).
+
+Note3: Log file is stored in `DISK_PATH/log`
 
 ## Variables
 
 Multiples environment variables can be modified to alter default runtime.
+
 * CPU: (Default "qemu64") type of cpu
 * THREADS: (Default "1") number of cpu threads per core
 * CORES: (Default "1") number of cpu cores
 * RAM: (Default "512") number of ram memory in MB
+
 
 * DISK_SIZE:(Default "16") Size of virtual disk in GB
 	* Set DISK_SIZE=0, if you don't want to have a virtual disk
@@ -124,34 +124,48 @@ Multiples environment variables can be modified to alter default runtime.
 	* It is now possible to pass the full disk device  (ie. DISK_SIZE="8G /dev/sdc")
 
 * DISK_FORMAT: (Default "qcow2") Type of disk format (qcow2 support snapshot), check [here](https://en.wikibooks.org/wiki/QEMU/Images) for more details.
-* DISK_CACHE: (DEPRECATED) Replace by DISK_OPT_DRV, check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
-* DISK_OPT_DRV: (Default "cache=writeback,discard=on,aio=threads,detect-zeroes=on") Additional option for disk drive. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
-* DISK_OPT_DEV: (Default "rotation_rate=1") Additional option for disk device. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
-* DISK_PATH: (Default "/image") Directory path where disk image (and bootloader) will be stored
+* DISK_CACHE: (DEPRECATED) Replace by DISK_OPTS_DRV.
+* DISK_OPTS_DRV: (Default "cache=writeback,discard=on,aio=threads,detect-zeroes=on")
+	* Additional option for disk drive. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
+* DISK_OPTS_DEV: (Default "rotation_rate=1")
+	* Additional option for disk device. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
+* DISK_PATH: (Default "/xpy/diskvm") Directory path where disk image (and bootloader) will be stored
+
 
 * BOOTLOADER_URL: (Default "") URL web link of the bootloader (ie. "http://host/path/bootloader.img")
 	* It can be raw, zip, gzip or tgz file.
 	* If "bootloader.img" file already exists in DISK_PATH, then it skips BOOTLOADER_URL download.
 * BOOTLOADER_AS_USB: (Default "Y") Boot the bootloader as USB or as Disk
 
+
 * VM_IP: (Default "20.20.20.21") Assigned IP for VM DHCP. Don't need to be changed. 
 * VM_MAC: (Default "00:11:32:2C:A7:85") Mac address use for VM DHCP to assigne VM_IP. This need to match MAC set in xpenology grub bootloader. 
 
+
 * VM_ENABLE_VGA: (Default "No") Enabling qxl vga and vnc. Not needed for Xpenology.
 * VM_ENABLE_VIRTIO: (Default "Yes") Enabling virtio disk. Make sure that bootloader has virtio drivers.
-* VM_ENABLE_VIRTIO_SCSI: (Default "No") Enabling virtio scsi disk. Make sure that bootloader has virtio drivers. Need VM_ENABLE_VIRTIO enabled.
-* VM_ENABLE_9P: (Default "Yes") Enabling virtio 9p mount point. Need VM_ENABLE_VIRTIO enabled.
-* VM_PATH_9P: (Default "/datashare") Directories path of 9p mount point to be shared with xpenology
-	* Need VM_ENABLE_9P enabled and -v docker option (ie. -v /xpenodock/data:/xpy_data)
-	* Can set multiple values separated by space (ie. -e VM_PATH_9P="/xpy_data /xpy_syst")
+* VM_ENABLE_VIRTIO_SCSI: (Default "No") Enabling virtio scsi disk. Make sure that bootloader has virtio drivers.
+	* VM_ENABLE_VIRTIO auto enabled.
+	* Use "S" value for Virtio SCSI Single.
+
+
+* VM_ENABLE_9P: (Default "No") Enabling virtio 9p mount point. Need VM_ENABLE_VIRTIO enabled.
+* VM_9P_PATH: (Default "") Directories path of 9p mount point to be shared with xpenology
+	* VM_ENABLE_9P auto enabled
+	* Can set multiple values separated by space (ie. -e VM_PATH_9P="/xpy/share9p /xpy/diskvm")
 	* For each value, it will be associated to 9p mount point tag "hostdata0", "hostdata1", ...
+	* Use with -v docker option for each value (ie. -v /host_dir/data:/xpy/share9p)
+* VM_9P_OPTS: (Default "local,security_model=passthrough") 9p fsdev options. 
 * VM_CUSTOM_OPTS: (Default "") Additionnal custom option to add to the launcher qemu command line
 
-* VM_TIMEOUT_POWERDOWN: (Default "10") Timeout for vm-powerdown command
+* VM_TIMEOUT_POWERDOWN: (Default "30") Timeout for vm-power-down command
 
-* GRUBCFG_VID: (Default "46f4") VendorID of bootloader disk.
-* GRUBCFG_PID: (Default "0001") ProductID of bootloader disk.
+
+* GRUBCFG_AUTO: (Default "Y") Auto set GRUBCFG_VID/GRUBCFG_PID if empty, depending on BOOTLOADER_AS_USB value.
+* GRUBCFG_VID: (Default "") VendorID of bootloader disk.
+* GRUBCFG_PID: (Default "") ProductID of bootloader disk.
 * GRUBCFG_SN: (Default "") Serial number of DSM.
+
 
 * GRUBCFG_DISKIDXMAP: (Default "")
 * GRUBCFG_SATAPORTMAP: (Default "")
@@ -170,7 +184,8 @@ The container has extra defined functions which allow you to manipulate the runn
 
 Example:
 ```bash
-$ docker exec -ti $( docker container ls -f 'ancestor=uxora/xpenology' -f "status=running" -q ) vm-snap-create
+$ docker exec $( docker container ls -f 'ancestor=uxora/xpenology' -f "status=running" -q ) vm-snap-create bckBeforeUpd
+$ docker exec xpenodock vm-snap-restore bckBeforeUpd
 ```
 
 
@@ -197,25 +212,20 @@ And follow [this tutorial](https://xpenology.club/compile-drivers-xpenology-with
 ### Recommended setup (without BOOTLOADER_URL)
 
 ```bash
-# To avoid ip_tables error on docker
-$ modprobe ip_tables
-
-# Create directories structure
-$ mkdir -vp /xpenodock/{data,syst,slnk}
-
 # Copy bootloader
-$ cp synoboot_103b_ds3615xs_virtio_9p.img /xpenodock/syst/bootloader.img
+$ cp synoboot_103b_ds3615xs_virtio_9p.img /host_dir/kvm/bootloader.img
 
 # Run xpenology docker (Warning: fake SN which need to be changed)
-$ docker run --privileged --cap-add=NET_ADMIN \
+$ docker run --name="xpenodock" --hostname="xpenodock" \
+    --privileged --cap-add=NET_ADMIN \
     --device=/dev/net/tun --device=/dev/kvm \
     -p 5000-5001:5000-5001 -p 2222:22 -p 8080:80 \
     -p 137-139:137-139 -p 445:445 \
     -e RAM="512" -e DISK_SIZE="16G" \
     -e GRUBCFG_SN="1234ABC012345" \
     -e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
-    -e DISK_PATH="/xpy_syst" -e VM_PATH_9P="/xpy_data" \
-    -v /xpenodock/syst:/xpy_syst -v /xpenodock/data:/xpy_data \
+    -e DISK_PATH="/xpy/diskvm" -e VM_PATH_9P="/xpy/share9p" \
+    -v /host_dir/kvm:/xpy/diskvm -v /host_dir/data:/xpy/share9p \
     uxora/xpenology
 ```
 
@@ -224,7 +234,7 @@ $ docker run --privileged --cap-add=NET_ADMIN \
 To mount Host Path/Docker Volumes to your Xpenology Image, you need to load 9p drivers in your xpenology image.
 
 After having your image with 9p drivers loaded, you need to create and script that will executed on every boot in your xpenology.
-This script should load the drivers and mount your 9p mountpoint, by default this docker image map the path /datashare (or /xpy_data) to the 9p "hostdata0".
+This script should load the drivers and mount your 9p mountpoint, by default this docker image map the path `/xpy/share9p` to the 9p `hostdata0`.
 
 Example
 ```bash
@@ -236,6 +246,8 @@ $ sudo insmod /volume1/homes/admin/9p.ko
 # From DSM web gui, create a "new share folder" in File Station (ie. datashare9p)
 # Open a ssh terminal on xpenology, then mount 9p hostdata0 to this folder  
 $ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata0 /volume1/datashare9p
+$ sudo chown -R :users /volume1/datashare9p
+$ sudo chmod -R g+rw /volume1/datashare9p
 ```
 
 If you want automount 9p folder at boot time, use "Control Panel > Task Scheduler > Create > Triggered Task" to set this command line as root schedule task.
@@ -246,16 +258,21 @@ Then access it by `\\HOST_IP`.
 If you want to access by name, you will have to add it on `hosts` file of your machine.
 
 ### Changing container parameters
+CAUTION: Most important files are vm disks. As long as you keep it safe, you should be able to get back your xpenology.
+* If you used `-v` option to mount host directory to `DISK_PATH` as `-e DISK_PATH="/xpy/diskvm" -v /host_dir/kvm:/xpy/diskvm`
+	- You should get all your bootloader and vm disks in /host_dir/kvm
+* If you didn't use -v option, then it uses docker volume on `DISK_PATH`
+	- You should find bootloader and kvm disks on a directory like : `/var/lib/docker/volumes/[...]/_data/` 
+```
+
 If you need to change a bootloader parameter (VM_MAC and GRUBCFG_*):
-- In DISK_PATH (ie. `/xpenodock/syst`) folder, uncompress : `$ tar -xzf bootloader.img.tar.gz`
+- In DISK_PATH (ie. `/host_dir/kvm`) folder, uncompress : `$ tar -xzf bootloader.img.tar.gz`
 - Then delete: `$ rm bootloader.img.tar.gz bootloader.qcow2`
 - Then follow instructions below for others parameters
 
 Otherwise for all others parameters :
-- If you want, delete old container: `$ docker container rm $( docker container ls -qf 'ancestor=uxora/xpenology' )`
+- Delete or Rename your old container: `$ docker container rm $( docker container ls -qf 'ancestor=uxora/xpenology' )`
 - Then recreate a container with new parameters: `$ docker run --privileged [...]`
-
-Note: Changing container or bootloader does not affect your dsm xpenology data. You should get it back the same as before as long as it uses the same vm disks.	
 
 ## TroubleShooting
 
