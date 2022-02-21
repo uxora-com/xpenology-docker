@@ -138,8 +138,8 @@ Multiples environment variables can be modified to alter default runtime.
 * BOOTLOADER_AS_USB: (Default "Y") Boot the bootloader as USB or as Disk
 
 
-* VM_IP: (Default "20.20.20.21") Assigned IP for VM DHCP. Don't need to be changed. 
-* VM_MAC: (Default "00:11:32:2C:A7:85") Mac address use for VM DHCP to assigne VM_IP. This need to match MAC set in xpenology grub bootloader. 
+* VM_NET_IP: (Default "20.20.20.21") Assigned IP for VM DHCP. Don't need to be changed. 
+* VM_NET_MAC: (Default "00:11:32:2C:A7:85") Mac address use for VM DHCP to assigne VM_NET_IP. This need to match MAC set in xpenology grub bootloader. 
 
 
 * VM_ENABLE_VGA: (Default "No") Enabling qxl vga and vnc. Not needed for Xpenology.
@@ -156,7 +156,10 @@ Multiples environment variables can be modified to alter default runtime.
 	* For each value, it will be associated to 9p mount point tag "hostdata0", "hostdata1", ...
 	* Use with -v docker option for each value (ie. -v /host_dir/data:/xpy/share9p)
 * VM_9P_OPTS: (Default "local,security_model=passthrough") 9p fsdev options. Check [here](https://wiki.qemu.org/Documentation/9psetup) for more details.
-* VM_CUSTOM_OPTS: (Default "") Additionnal custom option to add to the launcher qemu command line
+
+* VM_CUSTOM_OPTS: (Default "") Additionnal custom option to add to qemu command line
+* VM_CUSTOM_CODE: (Default "") Additionnal custom code to add before qemu command line
+
 
 * VM_TIMEOUT_POWERDOWN: (Default "30") Timeout for vm-power-down command
 
@@ -267,7 +270,7 @@ CAUTION: Most important files are vm disks. As long as you keep it safe, you sho
 	- You should find bootloader and kvm disks on a directory like : `/var/lib/docker/volumes/[...]/_data/` 
 ```
 
-If you need to change a bootloader parameter (VM_MAC and GRUBCFG_*):
+If you need to change a bootloader parameter (VM_NET_MAC and GRUBCFG_*):
 - In DISK_PATH (ie. `/host_dir/kvm`) folder, uncompress : `$ tar -xzf bootloader.img.tar.gz`
 - Then delete: `$ rm bootloader.img.tar.gz bootloader.qcow2`
 - Then follow instructions below for others parameters
