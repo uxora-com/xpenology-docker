@@ -25,8 +25,9 @@ exec &> >(tee -a ${DISK_PATH}/log/xpenodock$(date "+_%Y%m%d_%H%M%S").log)
 : ${DISK_OPTS_DEV:='rotation_rate=1'}
 : ${DISK_PATH:='/xpy/diskvm'}
 
-: ${VM_IP:="20.20.20.21"}
-: ${VM_MAC:="00:11:32:2C:A7:85"}
+: ${VM_NET_TAP=""}
+: ${VM_NET_IP:="20.20.20.21"}
+: ${VM_NET_MAC:="00:11:32:2C:A7:85"}
 
 : ${VM_ENABLE_VIRTIO:="Y"}
 : ${VM_ENABLE_VIRTIO_SCSI:="N"}
@@ -35,7 +36,6 @@ exec &> >(tee -a ${DISK_PATH}/log/xpenodock$(date "+_%Y%m%d_%H%M%S").log)
 
 : ${VM_9P_PATH:=''}
 : ${VM_9P_OPTS:='local,security_model=passthrough'}
-: ${VM_CUSTOM_OPTS:=''}
 
 : ${BOOTLOADER_URL:='http://host/path/bootloader.img'}
 : ${BOOTLOADER_AS_USB:='Y'}
@@ -49,6 +49,9 @@ exec &> >(tee -a ${DISK_PATH}/log/xpenodock$(date "+_%Y%m%d_%H%M%S").log)
 : ${GRUBCFG_SASIDXMAP:=''}
 : ${GRUBCFG_HDDHOTPLUG:=''}
 : ${GRUBCFG_MAC1:=''}
+
+: ${VM_CUSTOM_OPTS:=''}
+: ${VM_CUSTOM_CODE:=''}
 
 : ${DEBUG:='Y'}
 
@@ -89,26 +92,30 @@ setupDhcp () {
 # Setup macvtap device to connect later the VM and setup a new macvlan devide
 # to connect the host machine to the network
 configureNetworks () {
-  #For now we define static MAC because DHCP is very slow if MAC change every VM Boot
-  #Create bridge with static IP for the VM Guest(COnnection VM-Docker)
-  brctl addbr dockerbridge
-  ip addr add ${VM_IP%.*}.1/24 broadcast ${VM_IP%.*}.255 dev dockerbridge
-  ip link set dockerbridge up
-  #QEMU Works with taps, set tap to the bridge created
-  ip tuntap add dev vm-nat mode tap
-  ip link set vm-nat up promisc on
-  brctl addif dockerbridge vm-nat
+  if [[ "x${VM_NET_TAP}" == "x" ]]; then
+	  #For now we define static MAC because DHCP is very slow if MAC change every VM Boot
+	  
+	  VM_NET_TAP="vm-nat-gen"
+	  #Create bridge with static IP for the VM Guest(COnnection VM-Docker)
+	  brctl addbr dockerbridge
+	  ip addr add ${VM_NET_IP%.*}.1/24 broadcast ${VM_NET_IP%.*}.255 dev dockerbridge
+	  ip link set dockerbridge up
+	  #QEMU Works with taps, set tap to the bridge created
+	  ip tuntap add dev ${VM_NET_TAP} mode tap
+	  ip link set ${VM_NET_TAP} up promisc on
+	  brctl addif dockerbridge ${VM_NET_TAP}
 
-  #Add internet connection to the VM
-  iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-  iptables -t nat -A PREROUTING -i eth0 -p tcp  -j DNAT --to $VM_IP
-  iptables -t nat -A PREROUTING -i eth0 -p udp  -j DNAT --to $VM_IP
-  
-  #Enable port forwarding flag
-  sysctl -w net.ipv4.ip_forward=1
-  
-  #For now we define static MAC because DHCP is very slow if DHCP change every VM Boot
-  setupDhcp $VM_MAC $VM_IP
+	  #Add internet connection to the VM
+	  iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+	  iptables -t nat -A PREROUTING -i eth0 -p tcp  -j DNAT --to $VM_NET_IP
+	  iptables -t nat -A PREROUTING -i eth0 -p udp  -j DNAT --to $VM_NET_IP
+	  
+	  #Enable port forwarding flag
+	  sysctl -w net.ipv4.ip_forward=1
+	  
+	  #For now we define static MAC because DHCP is very slow if DHCP change every VM Boot
+	  setupDhcp $VM_NET_MAC $VM_NET_IP
+  fi
 }
 
 ddReplaceInFile () {
@@ -227,7 +234,7 @@ if [[ $flag_bootl_err -eq 0 ]]; then
 	
 	[[ "x${GRUBCFG_SN}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "sn=" ${GRUBCFG_SN} 0
 	
-	GRUBCFG_MAC1="$( echo ${VM_MAC} | tr -cd '[:alnum:]' | tr '[:lower:]' '[:upper:]' )"
+	GRUBCFG_MAC1="$( echo ${VM_NET_MAC} | tr -cd '[:alnum:]' | tr '[:lower:]' '[:upper:]' )"
 	[[ "x${GRUBCFG_MAC1}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "mac1=" ${GRUBCFG_MAC1} 0
 	
 	[[ "x${GRUBCFG_DISKIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "DiskIdxMap=" ${GRUBCFG_DISKIDXMAP} 1
@@ -407,15 +414,16 @@ fi
 # Configure Network
 # ######################################
 log "INFO" "Configuring network ..."
-DEFAULT_ROUTE=$(ip route | grep default | awk '{print $3}')
+#DEFAULT_ROUTE=$(ip route | grep default | awk '{print $3}')
 
 configureNetworks
-KVM_NET_OPTS="-netdev tap,ifname=vm-nat,script=no,downscript=no,id=hostnet0"
-#KVM_NET_OPTS="-netdev tap,vhost=on,id=hostnet0,fd=3 3<>/dev/vm-nat"
+
+KVM_NET_OPTS="-netdev tap,ifname=${VM_NET_TAP},script=no,downscript=no,id=hostnet0"
+#KVM_NET_OPTS="-netdev tap,vhost=on,id=hostnet0,fd=3 3<>/dev/${VM_NET_TAP}"
 #KVM_NET_OPTS="-netdev user,hostfwd=tcp:127.0.0.1:5000-:5000"
 [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] \
-	&& KVM_NET_OPTS="${KVM_NET_OPTS} -device virtio-net-pci,netdev=hostnet0,mac=$VM_MAC,id=net0" \
-	|| KVM_NET_OPTS="${KVM_NET_OPTS} -device e1000e,netdev=hostnet0,mac=$VM_MAC,id=net0"
+	&& KVM_NET_OPTS="${KVM_NET_OPTS} -device virtio-net-pci,netdev=hostnet0,mac=$VM_NET_MAC,id=net0" \
+	|| KVM_NET_OPTS="${KVM_NET_OPTS} -device e1000e,netdev=hostnet0,mac=$VM_NET_MAC,id=net0"
 
 
 # Hack for guest VMs complaining about "bad udp checksums in 5 packets"
@@ -424,31 +432,37 @@ iptables -A POSTROUTING -t mangle -p udp --dport bootpc -j CHECKSUM --checksum-f
         || ( log "WARNING" "Iptables hack for checksum FAILED" && ethtool -K eth0 tx off || true )
 
 
-# Build DNS options from container /etc/resolv.conf
-nameservers=($(grep '^nameserver' /etc/resolv.conf | sed 's/nameserver //'))
-searchdomains=$(grep '^search' /etc/resolv.conf | sed 's/search //' | sed 's/ /,/g')
-domainname=$(echo $searchdomains | awk -F"," '{print $1}')
+if [[ "x${VM_NET_TAP}" == "xvm-nat-gen" ]]; then
+	# Build DNS options from container /etc/resolv.conf
+	nameservers=($(grep '^nameserver' /etc/resolv.conf | sed 's/nameserver //'))
+	searchdomains=$(grep '^search' /etc/resolv.conf | sed 's/search //' | sed 's/ /,/g')
+	domainname=$(echo $searchdomains | awk -F"," '{print $1}')
 
-for nameserver in "${nameservers[@]}"; do
-  [[ -z $DNS_SERVERS ]] && DNS_SERVERS=$nameserver || DNS_SERVERS="$DNS_SERVERS,$nameserver"
-done
-DNSMASQ_OPTS="$DNSMASQ_OPTS                         \
-  --dhcp-option=option:dns-server,$DNS_SERVERS      \
-  --dhcp-option=option:router,${VM_IP%.*}.1         \
-  --dhcp-option=option:domain-search,$searchdomains \
-  --dhcp-option=option:domain-name,$domainname      \
-  "
-[[ -z $(hostname -d) ]] || DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-name,$(hostname -d)"
+	for nameserver in "${nameservers[@]}"; do
+	  [[ -z $DNS_SERVERS ]] && DNS_SERVERS=$nameserver || DNS_SERVERS="$DNS_SERVERS,$nameserver"
+	done
+	DNSMASQ_OPTS="$DNSMASQ_OPTS                         \
+	  --dhcp-option=option:dns-server,$DNS_SERVERS      \
+	  --dhcp-option=option:router,${VM_NET_IP%.*}.1         \
+	  --dhcp-option=option:domain-search,$searchdomains \
+	  --dhcp-option=option:domain-name,$domainname      \
+	  "
+	[[ -z $(hostname -d) ]] || DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-name,$(hostname -d)"
 
-log "INFO" "Lauching dnsmasq"
-log "DEBUG" "dnsmasq options: $DNSMASQ_OPTS"
-$DNSMASQ $DNSMASQ_OPTS
+	log "INFO" "Lauching dnsmasq"
+	log "DEBUG" "dnsmasq options: $DNSMASQ_OPTS"
+	$DNSMASQ $DNSMASQ_OPTS
+fi
 
+if [[ "x${VM_CUSTOM_CODE}" != "x" ]]; then
+	log "INFO" "Running custom code ..."
+	eval exec ${VM_CUSTOM_CODE}
+fi
 
 # Launching Qemu VM command
 # ######################################
 log "INFO" "Launching qemu-kvm ..."
-COMMAND="$LAUNCHER ${KVM_OPTS} ${KVM_PREBOOT} ${KVM_SYNOBOOT} ${KVM_BLK_OPTS} ${KVM_VIDEO_OPTS} ${KVM_CPU_OPTS} ${KVM_NET_OPTS} ${KVM_9P} ${VM_CUSTOM_OPTS} $@"
+COMMAND="$LAUNCHER ${KVM_OPTS} ${KVM_PREBOOT} ${KVM_SYNOBOOT} ${KVM_BLK_OPTS} ${KVM_VIDEO_OPTS} ${KVM_CPU_OPTS} ${KVM_NET_OPTS} ${KVM_9P} ${VM_CUSTOM_OPTS}"
 log "DEBUG" "${COMMAND}"
 trap '/usr/bin/vm-power-down' SIGTERM
 trap '/usr/bin/vm-power-down' SIGINT
