@@ -1,9 +1,9 @@
 FROM uxora/debian-kvm
 LABEL maintainer="Michel VONGVILAY <https://www.uxora.com/about/me#contact-form>"
-LABEL version="0.6"
+LABEL version="0.7"
 
 
-ENV SCRIPT_VERSION "0.6"
+ENV SCRIPT_VERSION "0.7"
 
 # Ressources
 ENV CPU "qemu64"
@@ -25,10 +25,10 @@ ENV DISK_PATH "/xpy/diskvm"
 # ENV DISK_CACHE "none" # Deprecated replace by DISK_OPTS_DRV
 
 #Network
-# # (VM_IP: Dont need to change coz all is port forwarded) 
-# # (VM_MAC: Correspond to MAC bootloader, so it will be set to GRUBCFG_MAC1 aswell)
-ENV VM_IP 20.20.20.21
-ENV VM_MAC "00:11:32:2C:A7:85"
+# # (VM_NET_IP: Dont need to change coz all is port forwarded) 
+# # (VM_NET_MAC: Correspond to MAC bootloader, so it will be set to GRUBCFG_MAC1 aswell)
+ENV VM_NET_IP 20.20.20.21
+ENV VM_NET_MAC "00:11:32:2C:A7:85"
 
 #Options
 ENV VM_ENABLE_VGA "N"
@@ -51,7 +51,7 @@ ENV GRUBCFG_DISKIDXMAP ""
 ENV GRUBCFG_SATAPORTMAP ""
 ENV GRUBCFG_SASIDXMAP ""
 ENV GRUBCFG_HDDHOTPLUG ""
-# GRUBCFG_MAC1 will be automacticaly set to VM_MAC value
+# GRUBCFG_MAC1 will be automacticaly set to VM_NET_MAC value
 
 VOLUME ${DISK_PATH}
 
