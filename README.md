@@ -5,7 +5,7 @@ KVM VirtualMachine of Xpenology DSM running in a docker container, which can be 
 This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3/7.0.1 with jun and redpill bootloader.
 So technicaly it can run any bootloader you provide.
 
-Latest tested (dor DS3615xs):
+Latest tested (for DS3615xs):
 - 6.2.3 with Jun's 1.03b (virtio+9p)
 - 7.0.1 with redpill (virtio+9p)
 
@@ -212,9 +212,10 @@ Check [this forum](https://xpenology.com/forum/) for more details about xpenolog
 
 And follow [this tutorial](https://xpenology.club/compile-drivers-xpenology-with-windows-10-and-build-in-bash) if you want to compile drivers for your specific xpenology version.
 
-### Recommended setup (without BOOTLOADER_URL)
+### Running docker without BOOTLOADER_URL
 
 ```bash
+# On docker host
 # Copy bootloader
 $ cp synoboot_103b_ds3615xs_virtio_9p.img /host_dir/kvm/bootloader.img
 
@@ -232,22 +233,59 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
     uxora/xpenology
 ```
 
+### Running docker with its own fixed IP (No port mapping)
+
+```bash
+# On docker host
+# Create a macvlan matching your local network
+$ docker network create -d macvlan \
+  --subnet=192.168.0.0/24 \
+  --gateway=192.168.0.1 \
+  -o parent=eth0 \
+  macvlan0
+
+# Run xpenology docker (Warning: fake SN/URL which need to be changed)
+$ docker run --name="xpenodock" --hostname="xpenodock" \
+    --privileged --cap-add=NET_ADMIN \
+    --device=/dev/net/tun --device=/dev/kvm \
+	--network macvlan0 --ip=192.168.0.50 \
+	-e BOOTLOADER_URL="http://myurl/synoboot.tgz" \
+    -e RAM="512" -e DISK_SIZE="16G" \
+    -e GRUBCFG_SN="1234ABC012345" \
+    -e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
+    -e DISK_PATH="/xpy/diskvm" -e VM_PATH_9P="/xpy/share9p" \
+    -v /host_dir/kvm:/xpy/diskvm -v /host_dir/data:/xpy/share9p \
+    uxora/xpenology
+```
+
+### Some useful docker command
+
+```bash
+# Access container by name
+$ docker exec -ti xpenodock /bin/bash
+
+# Access container in another way
+$ docker exec -ti $( docker container ls -f 'ancestor=uxora/xpenology' -f "status=running" -q ) /bin/bash
+
+# Stop and Delete containers
+$ docker container stop xpenodock && docker container rm xpenodock
+
+# Delete docker image
+$ docker rmi $( docker image ls --filter 'reference=uxora/*' -q )
+```
+
 ### Mount Docker Host Volumes to Xpenology
 
-To mount Host Path/Docker Volumes to your Xpenology Image, you need to load 9p drivers in your xpenology image.
+Open a ssh terminal on your xpenology dsm:
 
-After having your image with 9p drivers loaded, you need to create and script that will executed on every boot in your xpenology.
-This script should load the drivers and mount your 9p mountpoint, by default this docker image map the path `/xpy/share9p` to the 9p `hostdata0`.
-
-Example
 ```bash
 # Load 9p drivers, if not already loaded
 $ sudo insmod /volume1/homes/admin/9pnet.ko
 $ sudo insmod /volume1/homes/admin/9pnet_virtio.ko
 $ sudo insmod /volume1/homes/admin/9p.ko
 
-# From DSM web gui, create a "new share folder" in File Station (ie. datashare9p)
-# Open a ssh terminal on xpenology, then mount 9p hostdata0 to this folder  
+# In DSM web gui, create a "new share folder" in File Station (ie. datashare9p)
+# then mount 9p hostdata0 to this folder  
 $ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata0 /volume1/datashare9p
 $ sudo chown -R :users /volume1/datashare9p
 $ sudo chmod -R g+rw /volume1/datashare9p
