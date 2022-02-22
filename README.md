@@ -80,7 +80,9 @@ This image provides some special features to get the VM running as straightforwa
 
 ```bash
 # Simple run
-$ docker run --privileged \
+$ docker run --privileged --cap-add=NET_ADMIN \
+	--device=/dev/net/tun --device=/dev/kvm \
+	-p 5000-5001:5000-5001 \
 	-e BOOTLOADER_URL="http://example.com/path/synoboot.tgz" \
 	uxora/xpenology
 
