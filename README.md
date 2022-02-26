@@ -332,7 +332,6 @@ CAUTION: Most important files are vm disks. As long as you keep it safe, you sho
 	- You should get all your bootloader and vm disks in /host_dir/kvm
 * If you didn't use -v option, then it uses docker volume on `DISK_PATH`
 	- You should find bootloader and kvm disks on a directory like : `/var/lib/docker/volumes/[...]/_data/` 
-```
 
 If you need to change a bootloader parameter (VM_NET_MAC and GRUBCFG_*):
 - In DISK_PATH (ie. `/host_dir/kvm`) folder, uncompress : `$ tar -xzf bootloader.img.tar.gz`
