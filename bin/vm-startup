@@ -434,7 +434,14 @@ if [[ "x${VM_NET_TAP}" == "x" ]]; then
 		#VM_NET_MAC=$(</sys/class/net/${VM_NET_TAP}/address)
 		_tmpTapPath="/dev/tap$(</sys/class/net/${VM_NET_TAP}/ifindex)"
 		[[ ! -e ${_tmpTapPath} ]] && [[ -e /dev0/${_tmpTapPath##*/} ]] && ln -s /dev0/${_tmpTapPath##*/} ${_tmpTapPath}
-		[[ ! -e ${_tmpTapPath} ]] && log "ERROR" "... Tap file does not exist: ${_tmpTapPath}" && exit 15
+		if [[ ! -e ${_tmpTapPath} ]]; then
+			log "WARNING" "... file does not exist: ${_tmpTapPath}"
+			# get MAJOR MINOR DEVNAME
+			eval $(</sys/class/net/${VM_NET_TAP}/macvtap/${_tmpTapPath##*/}/uevent)
+			mknod ${_tmpTapPath} c $MAJOR $MINOR \
+				&& log "INFO" "... file created with mknod: ${_tmpTapPath}"  
+				|| ( log "ERROR" "... Tap file does not exist and cannot mknod: ${_tmpTapPath}" && exit 15 )
+		fi
 		KVM_NET_OPTS="-netdev tap,id=hostnet0,vhost=on,vhostfd=40,fd=30 30<>${_tmpTapPath} 40<>/dev/vhost-net"
 	else
 		VM_NET_TAP="_VmNatTap"
