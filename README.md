@@ -179,11 +179,11 @@ Multiples environment variables can be modified to alter default runtime.
 The container has extra defined functions which allow you to manipulate the running VM:
 - vm-power-down: This function Shutdown graceful the VM, until VM_TIMEOUT_POWERDOWN variable is reached.
 - vm-power-reset: Hard Reset the VM (this function doesn't stop the container)
-- vm-snap-create <snapshotName>: Create a Live snapshot with memory (work with DISK_FORMAT=qcow2)
-- vm-snap-delete <snapshotName>: Delete a Live snapshot
-- vm-snap-restore <snapshotName>: stop the VM and restart using the choosed snapshot
+- vm-snap-create "snapshotName": Create a Live snapshot with memory (work with DISK_FORMAT=qcow2)
+- vm-snap-delete "snapshotName": Delete a Live snapshot
+- vm-snap-restore "snapshotName": stop the VM and restart using the choosed snapshot
 - vm-snap-info: Show all the snapshots
-- vm-cmd <command>: Send command to qemu monitor, check [here](https://www.qemu.org/docs/master/system/monitor.html) for more details.
+- vm-cmd "command": Send command to qemu monitor, check [here](https://www.qemu.org/docs/master/system/monitor.html) for more details.
 
 Example:
 ```bash
