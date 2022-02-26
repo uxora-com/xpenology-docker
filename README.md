@@ -59,8 +59,9 @@ If you have any issue, please raise it in "issues" area.
 ## Features
 
 This image provides some special features to get the VM running as straightforward as possible
-- VM DHCP: Runing VM will have DHCP and will be provisioned with 20.20.20.21 (by default)
-- Port Forwarding From container to VM, in order to access to the VM using the HOST_IP:5000
+- VM NAT (default): NAT + Port Forwarding, access DSM with "DOCKER_HOST_IP:5000"
+- VM Fixed IP: NAT + Port Forwarding and fixed IP with macvlan "FIXED_IP:5000" (see Notes section below)
+- VM DHCP: DHCP with macvtap "DHCP_IP:5000" (see Notes section below)
 - Live Snapshoting: Create and restore (pretty useful to test update)
 - 9P Mountpoints (Access host docker volumes from Xpenology)
 
@@ -76,30 +77,28 @@ This image provides some special features to get the VM running as straightforwa
 
 ## Usage
 
-`--privileged` parameter always mandatory, here's some examples:
-
 ```bash
 # Simple run
-$ docker run --privileged --cap-add=NET_ADMIN \
-	--device=/dev/net/tun --device=/dev/kvm \
-	-p 5000-5001:5000-5001 \
-	-e BOOTLOADER_URL="http://example.com/path/synoboot.tgz" \
-	uxora/xpenology
+$ docker run --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 \
+    --device=/dev/net/tun --device=/dev/kvm \
+    -p 5000-5001:5000-5001 \
+    -e BOOTLOADER_URL="http://example.com/path/synoboot.tgz" \
+    uxora/xpenology
 
 # Run with more specific parameters
 $ docker run --name="xpenodock" --hostname="xpenodock" \
-	--privileged --cap-add=NET_ADMIN \
-	--device=/dev/net/tun --device=/dev/kvm \
-	-p 5000-5001:5000-5001 -p 2222:22 -p 8080:80 \
-	-e CPU="qemu64" -e THREADS=1 -e RAM=512 \
-	-e DISK_SIZE="8G 16G" -e DISK_PATH="/xpy/diskvm" \
-	-e VM_ENABLE_9P="Y" -e VM_PATH_9P="/xpy/share9p" \
-	-e BOOTLOADER_AS_USB="Y" -e VM_ENABLE_VIRTIO="Y" \
-	-e BOOTLOADER_URL="http://192.168.0.14/path/synoboot.zip" \
-	-e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
-	-v /host_dir/data:/xpy/share9p \
-	-v /host_dir/kvm:/xpy/diskvm \
-	uxora/xpenology
+    --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 \
+    --device=/dev/net/tun --device=/dev/kvm \
+    -p 5000-5001:5000-5001 -p 2222:22 -p 8080:80 \
+    -e CPU="qemu64" -e THREADS=1 -e RAM=512 \
+    -e DISK_SIZE="8G 16G" -e DISK_PATH="/xpy/diskvm" \
+    -e VM_ENABLE_9P="Y" -e VM_9P_PATH="/xpy/share9p" \
+    -e BOOTLOADER_AS_USB="Y" -e VM_ENABLE_VIRTIO="Y" \
+    -e BOOTLOADER_URL="http://example.com/path/synoboot.zip" \
+    -e GRUBCFG_SATAPORTMAP="6" -e GRUBCFG_DISKIDXMAP="00" \
+    -v /host_dir/data:/xpy/share9p \
+    -v /host_dir/kvm:/xpy/diskvm \
+    uxora/xpenology
 ```
 
 Note0: For full disk passtrough, check tutorial here: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
@@ -154,7 +153,7 @@ Multiples environment variables can be modified to alter default runtime.
 * VM_ENABLE_9P: (Default "No") Enabling virtio 9p mount point. Need VM_ENABLE_VIRTIO enabled.
 * VM_9P_PATH: (Default "") Directories path of 9p mount point to be shared with xpenology
 	* VM_ENABLE_9P auto enabled
-	* Can set multiple values separated by space (ie. -e VM_PATH_9P="/xpy/share9p /xpy/diskvm")
+	* Can set multiple values separated by space (ie. -e VM_9P_PATH="/xpy/share9p /xpy/diskvm")
 	* For each value, it will be associated to 9p mount point tag "hostdata0", "hostdata1", ...
 	* Use with -v docker option for each value (ie. -v /host_dir/data:/xpy/share9p)
 * VM_9P_OPTS: (Default "local,security_model=passthrough") 9p fsdev options. Check [here](https://wiki.qemu.org/Documentation/9psetup) for more details.
@@ -171,10 +170,9 @@ Multiples environment variables can be modified to alter default runtime.
 * GRUBCFG_PID: (Default "") ProductID of bootloader disk.
 * GRUBCFG_SN: (Default "") Serial number of DSM.
 
-
-* GRUBCFG_DISKIDXMAP: (Default "")
-* GRUBCFG_SATAPORTMAP: (Default "")
-* GRUBCFG_HDDHOTPLUG: (Default "")
+* GRUBCFG_SATAPORTMAP: (Default "") Each digit is the number of port of a sata device (ie "6") 
+* GRUBCFG_DISKIDXMAP: (Default "") 2 digits to map each sata device (ie "00")
+* GRUBCFG_HDDHOTPLUG: (Default "") Not used yet ...
 
 
 ## Featured Functions
@@ -223,39 +221,65 @@ $ cp synoboot_103b_ds3615xs_virtio_9p.img /host_dir/kvm/bootloader.img
 
 # Run xpenology docker (Warning: fake SN which need to be changed)
 $ docker run --name="xpenodock" --hostname="xpenodock" \
-    --privileged --cap-add=NET_ADMIN \
+    --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 \
     --device=/dev/net/tun --device=/dev/kvm \
     -p 5000-5001:5000-5001 -p 2222:22 -p 8080:80 \
     -p 137-139:137-139 -p 445:445 \
     -e RAM="512" -e DISK_SIZE="16G" \
     -e GRUBCFG_SN="1234ABC012345" \
-    -e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
-    -e DISK_PATH="/xpy/diskvm" -e VM_PATH_9P="/xpy/share9p" \
+    -e GRUBCFG_SATAPORTMAP="6" -e GRUBCFG_DISKIDXMAP="00" \
+    -e DISK_PATH="/xpy/diskvm" -e VM_9P_PATH="/xpy/share9p" \
     -v /host_dir/kvm:/xpy/diskvm -v /host_dir/data:/xpy/share9p \
     uxora/xpenology
 ```
 
-### Running docker with its own fixed IP (No port mapping)
+### Running docker with its own fixed IP (No port mapping needed)
 
 ```bash
 # On docker host
 # Create a macvlan matching your local network
 $ docker network create -d macvlan \
-  --subnet=192.168.0.0/24 \
-  --gateway=192.168.0.1 \
-  -o parent=eth0 \
-  macvlan0
+    --subnet=192.168.0.0/24 \
+    --gateway=192.168.0.1 \
+    --ip-range=192.168.0.100/28 \
+    -o parent=eth0 \
+    macvlan0
 
 # Run xpenology docker (Warning: fake SN/URL which need to be changed)
 $ docker run --name="xpenodock" --hostname="xpenodock" \
-    --privileged --cap-add=NET_ADMIN \
+    --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 \
     --device=/dev/net/tun --device=/dev/kvm \
-	--network macvlan0 --ip=192.168.0.50 \
-	-e BOOTLOADER_URL="http://myurl/synoboot.tgz" \
+    --network macvlan0 --ip=192.168.0.100 \
+    -e BOOTLOADER_URL="http://myurl/synoboot.tgz" \
     -e RAM="512" -e DISK_SIZE="16G" \
     -e GRUBCFG_SN="1234ABC012345" \
-    -e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2" \
-    -e DISK_PATH="/xpy/diskvm" -e VM_PATH_9P="/xpy/share9p" \
+    -e GRUBCFG_SATAPORTMAP="6" -e GRUBCFG_DISKIDXMAP="00" \
+    -e DISK_PATH="/xpy/diskvm" -e VM_9P_PATH="/xpy/share9p" \
+    -v /host_dir/kvm:/xpy/diskvm -v /host_dir/data:/xpy/share9p \
+    uxora/xpenology
+```
+
+### Running docker with DHCP IP (No port mapping needed)
+```bash
+# On docker host
+# Create a macvlan matching your local network
+$ docker network create -d macvlan \
+    --subnet=192.168.0.0/24 \
+    --gateway=192.168.0.1 \
+    --ip-range=192.168.0.100/28 \
+    -o parent=eth0 \
+    macvlan0
+
+# Run xpenology docker (Warning: --device-cgroup-rule number may be different for you)
+$ docker run --name="xpenodock" --hostname="xpenodock" \
+    --cap-add=NET_ADMIN --device-cgroup-rule='c 235:* rwm' \
+    --device=/dev/net/tun --device=/dev/kvm --device=/dev/vhost-net \
+    --network macvlan0 -e VM_NET_DHCP="Y" \
+    -e BOOTLOADER_URL="http://myurl/synoboot.tgz" \
+    -e RAM="512" -e DISK_SIZE="16G" \
+    -e GRUBCFG_SN="1234ABC012345" \
+    -e GRUBCFG_SATAPORTMAP="6" -e GRUBCFG_DISKIDXMAP="00" \
+    -e DISK_PATH="/xpy/diskvm" -e VM_9P_PATH="/xpy/share9p" \
     -v /host_dir/kvm:/xpy/diskvm -v /host_dir/data:/xpy/share9p \
     uxora/xpenology
 ```
@@ -317,7 +341,7 @@ If you need to change a bootloader parameter (VM_NET_MAC and GRUBCFG_*):
 
 Otherwise for all others parameters :
 - Delete or Rename your old container: `$ docker container rm $( docker container ls -qf 'ancestor=uxora/xpenology' )`
-- Then recreate a container with new parameters: `$ docker run --privileged [...]`
+- Then recreate a container with new parameters: `$ docker run [...]`
 
 ## TroubleShooting
 
@@ -360,8 +384,8 @@ $ modprobe fuse
 
 #### if iptables issue with msg like:
 ```
-	iptables v1.6.0: can't initialize iptables table `nat': Table does not exist (do you need to insmod?)
-	Perhaps iptables or your kernel needs to be upgraded.
+    iptables v1.6.0: can't initialize iptables table `nat': Table does not exist (do you need to insmod?)
+    Perhaps iptables or your kernel needs to be upgraded.
 ```
 
 * Try to reload ip_tables module
@@ -377,10 +401,10 @@ With the following message
 ```
 We've detected errors on the hard drive (x, y) and the SATA ports have also been disabled.
 ```
-* Then try to add these bootloader parameters: `-e GRUBCFG_DISKIDXMAP="00" -e GRUBCFG_SATAPORTMAP="2"`
+* Then try to add these bootloader parameters: `-e GRUBCFG_SATAPORTMAP="6" -e GRUBCFG_DISKIDXMAP="00"`
 * This required to delete current bootloader to be able to rebuilt it
 * Try to change to other value if this one does not work  
-	
+
 ## License
 Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file to you under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 

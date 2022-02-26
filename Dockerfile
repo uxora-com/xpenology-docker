@@ -1,9 +1,9 @@
 FROM uxora/debian-kvm
 LABEL maintainer="Michel VONGVILAY <https://www.uxora.com/about/me#contact-form>"
-LABEL version="0.7"
+LABEL version="0.8"
 
 
-ENV SCRIPT_VERSION "0.7"
+ENV SCRIPT_VERSION "0.8"
 
 # Ressources
 ENV CPU "qemu64"
@@ -18,7 +18,7 @@ ENV BOOTLOADER_AS_USB "Y"
 #Disk
 ENV DISK_SIZE "16"
 ENV DISK_FORMAT "qcow2"
-ENV DISK_OPTS_DRV "cache=writeback,discard=on,aio=threads,detect-zeroes=on"
+ENV DISK_OPTS_DRV "cache=writeback,discard=on,aio=threads,detect-zeroes=unmap"
 ENV DISK_OPTS_DEV "rotation_rate=1"
 ENV DISK_PATH "/xpy/diskvm"
 
@@ -27,8 +27,10 @@ ENV DISK_PATH "/xpy/diskvm"
 #Network
 # # (VM_NET_IP: Dont need to change coz all is port forwarded) 
 # # (VM_NET_MAC: Correspond to MAC bootloader, so it will be set to GRUBCFG_MAC1 aswell)
+# # (VM_NET_DHCP: It use MACVTAP which is not compatible with all configuration)
 ENV VM_NET_IP 20.20.20.21
 ENV VM_NET_MAC "00:11:32:2C:A7:85"
+ENV VM_NET_DHCP "N"
 
 #Options
 ENV VM_ENABLE_VGA "N"
@@ -62,7 +64,7 @@ ENTRYPOINT /usr/bin/vm-startup
 ARG DEBIAN_FRONTEND=noninteractive
 RUN \
   apt-get update && \
-  apt-get install -y --no-install-recommends ethtool file netcat unzip vim-tiny && \
+  apt-get install -y --no-install-recommends ethtool file netcat unzip vim-tiny isc-dhcp-client iputils-ping && \
   apt-get autoclean && \
   apt-get autoremove && \
   rm -rf /var/lib/apt/lists/*
