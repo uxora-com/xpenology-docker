@@ -53,6 +53,7 @@ exec &> >(tee -a ${DISK_PATH}/log/xpenodock$(date "+_%Y%m%d_%H%M%S").log)
 
 : ${VM_CUSTOM_OPTS:=''}
 : ${VM_CUSTOM_CODE:=''}
+: ${VM_CUSTOM_BOOTWAIT:='10'}
 
 : ${DEBUG:='Y'}
 
@@ -431,16 +432,22 @@ if [[ "x${VM_NET_TAP}" == "x" ]]; then
 
 		ip a flush ${VM_NET_TAP}
 		
-		#VM_NET_MAC=$(</sys/class/net/${VM_NET_TAP}/address)
 		_tmpTapPath="/dev/tap$(</sys/class/net/${VM_NET_TAP}/ifindex)"
+		# get MAJOR MINOR DEVNAME
+		MAJOR=""
+		eval "$(</sys/class/net/${VM_NET_TAP}/macvtap/${_tmpTapPath##*/}/uevent) _tmp=0"
+		
+		[[ "x${MAJOR}" != "x" ]] \
+			&& log "INFO" "... PLEASE MAKE SURE, Docker run command line used: --device-cgroup-rule='c ${MAJOR}:* rwm'" \
+			|| ( log "ERROR" "... macvtap creation issue: Cannot find: /sys/class/net/${VM_NET_TAP}/" && exit 15 )
+		
 		[[ ! -e ${_tmpTapPath} ]] && [[ -e /dev0/${_tmpTapPath##*/} ]] && ln -s /dev0/${_tmpTapPath##*/} ${_tmpTapPath}
+		
 		if [[ ! -e ${_tmpTapPath} ]]; then
 			log "WARNING" "... file does not exist: ${_tmpTapPath}"
-			# get MAJOR MINOR DEVNAME
-			eval $(</sys/class/net/${VM_NET_TAP}/macvtap/${_tmpTapPath##*/}/uevent)
 			mknod ${_tmpTapPath} c $MAJOR $MINOR \
-				&& log "INFO" "... file created with mknod: ${_tmpTapPath}" \
-				|| ( log "ERROR" "... Tap file does not exist and cannot mknod: ${_tmpTapPath}" && exit 15 )
+				&& log "INFO" "... File created with mknod: ${_tmpTapPath}" \
+				|| ( log "ERROR" "... Cannot mknod: ${_tmpTapPath}" && exit 16 )
 		fi
 		KVM_NET_OPTS="-netdev tap,id=hostnet0,vhost=on,vhostfd=40,fd=30 30<>${_tmpTapPath} 40<>/dev/vhost-net"
 	else
@@ -487,8 +494,15 @@ iptables -A POSTROUTING -t mangle -p udp --dport bootpc -j CHECKSUM --checksum-f
 
 if [[ "x${VM_CUSTOM_CODE}" != "x" ]]; then
 	log "INFO" "Running custom code ..."
+	log "INFO" "... ${VM_CUSTOM_CODE}"
 	eval ${VM_CUSTOM_CODE}
 fi
+
+[[ "x${MAJOR}" != "x" ]] && log "INFO" "PLEASE MAKE SURE, Docker is using the following option otherwise you may have permission issue on ${_tmpTapPath} file: --device-cgroup-rule='c ${MAJOR}:* rwm' "
+[[ "${_DhcpIP}" == [0-9.]* ]] && log "INFO" "You should access your DSM with: http://${_DhcpIP}:5000"
+
+log "INFO" "Pause for ${VM_CUSTOM_BOOTWAIT}s, please wait ..."
+sleep ${VM_CUSTOM_BOOTWAIT}
 
 # Launching Qemu VM command
 # ######################################
