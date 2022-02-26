@@ -439,7 +439,7 @@ if [[ "x${VM_NET_TAP}" == "x" ]]; then
 			# get MAJOR MINOR DEVNAME
 			eval $(</sys/class/net/${VM_NET_TAP}/macvtap/${_tmpTapPath##*/}/uevent)
 			mknod ${_tmpTapPath} c $MAJOR $MINOR \
-				&& log "INFO" "... file created with mknod: ${_tmpTapPath}"  
+				&& log "INFO" "... file created with mknod: ${_tmpTapPath}" \
 				|| ( log "ERROR" "... Tap file does not exist and cannot mknod: ${_tmpTapPath}" && exit 15 )
 		fi
 		KVM_NET_OPTS="-netdev tap,id=hostnet0,vhost=on,vhostfd=40,fd=30 30<>${_tmpTapPath} 40<>/dev/vhost-net"
