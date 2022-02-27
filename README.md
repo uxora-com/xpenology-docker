@@ -1,6 +1,6 @@
 # Synopsis
 
-KVM VirtualMachine of Xpenology DSM running in a docker container, which can be run directly from docker-hub by specifying a BOOTLOADER_URL.
+KVM VirtualMachine of Xpenology DSM running in a docker container, which can be run directly from docker-hub by specifying a BOOTLOADER_URL or local file.
 
 This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3/7.0.1 with jun and redpill bootloader.
 So technicaly it can run any bootloader you provide.
@@ -12,6 +12,7 @@ Latest tested (for DS3615xs):
 UPDATE:
 - PID, VID and SN (Serial Number) can now be pass as parameter to Docker, the bootloader is modified during the first boot.
 - Redpill bootloader compatibility
+- Run without BOOTLOADER_URL by using docker option: `-v /path/myfile:/bootloader`
 
 ## Warning / Disclaimer
 
@@ -32,7 +33,7 @@ Tutorial: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
 Compile Redpill bootloader: https://github.com/uxora-com/rpext
 
 ## Testing Notes
-Personnal testing has been done with ds3615xs jun's loader 1.03b with virtio drivers.
+Personnal testing has been done with ds3615xs jun's loader 1.03b and RedPill (with virtio/9p drivers).
 
 - Proxmox Lxc (OK):
 	- Cpu AMD
@@ -136,8 +137,9 @@ Multiples environment variables can be modified to alter default runtime.
 * BOOTLOADER_URL: (Default "") URL web link of the bootloader (ie. "http://host/path/bootloader.img")
 	* It can be raw, zip, gzip or tgz file.
 	* If "bootloader.img" file already exists in DISK_PATH, then it skips BOOTLOADER_URL download.
+	* If using docker option: `-v /path/myfile:/bootloader` , then it skips BOOTLOADER_URL download.
 * BOOTLOADER_AS_USB: (Default "Y") Boot the bootloader as USB or as Disk
-
+* BOOTLOADER_FORCE_REPLACE: Remove existing bootloader in DISK_PATH before getting bootloader.
 
 * VM_NET_IP: (Default "20.20.20.21") Assigned IP for VM DHCP. Don't need to be changed. 
 * VM_NET_MAC: (Default "00:11:32:2C:A7:85") Mac address use for VM DHCP to assigne VM_NET_IP. This need to match MAC set in xpenology grub bootloader. 
@@ -215,10 +217,6 @@ And follow [this tutorial](https://xpenology.club/compile-drivers-xpenology-with
 ### Running docker without BOOTLOADER_URL
 
 ```bash
-# On docker host
-# Copy bootloader
-$ cp synoboot_103b_ds3615xs_virtio_9p.img /host_dir/kvm/bootloader.img
-
 # Run xpenology docker (Warning: fake SN which need to be changed)
 $ docker run --name="xpenodock" --hostname="xpenodock" \
     --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 \
@@ -230,6 +228,7 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
     -e GRUBCFG_SATAPORTMAP="6" -e GRUBCFG_DISKIDXMAP="00" \
     -e DISK_PATH="/xpy/diskvm" -e VM_9P_PATH="/xpy/share9p" \
     -v /host_dir/kvm:/xpy/diskvm -v /host_dir/data:/xpy/share9p \
+    -v /local_path/synoboot.tgz:/bootloader \
     uxora/xpenology
 ```
 
