@@ -12,7 +12,7 @@ Latest tested (for DS3615xs):
 UPDATE:
 - PID, VID and SN (Serial Number) can now be pass as parameter to Docker, the bootloader is modified during the first boot.
 - Redpill bootloader compatibility
-- Run without BOOTLOADER_URL by using docker option: `-v /path/myfile:/bootloader`
+- Run without BOOTLOADER_URL by using local file with following docker option: `-v /path/myfile:/bootloader`
 
 ## Warning / Disclaimer
 
