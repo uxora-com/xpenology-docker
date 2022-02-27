@@ -3,7 +3,7 @@
 KVM VirtualMachine of Xpenology DSM running in a docker container, which can be run directly from docker-hub by specifying a BOOTLOADER_URL or a local file.
 
 This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3/7.0.1 with jun and redpill bootloader.
-So technicaly it can run any bootloader you provide.
+So technically it can run any bootloader you provide.
 
 Latest tested (for DS3615xs):
 - 6.2.3 with Jun's 1.03b (virtio+9p)
@@ -16,11 +16,11 @@ UPDATE:
 
 ## Warning / Disclaimer
 
-This system is for testing or educational purpose ONLY, and It is NOT recommended for using in production environment because it has no support and it has not been proven  stable/reliable.
+This system is for testing or educational purpose ONLY, and It is NOT recommended for using in production environment because it has no support, and it has not been proven  stable/reliable.
 
-So DATA LOSS can happens by using this system due to its instability, SO this is ONLY on your own responsibility to use.
+So DATA LOSS can happen by using this system due to its instability, SO this is ONLY on your own responsibility to use.
 
-If you are happy with the testing of this product, I would highly recommend you to go for an original Synology hardware especially for PRODUCTION environment where data is critical.
+If you are happy with the testing of this product, I would highly recommend you to go for an original Synology hardware, especially for PRODUCTION environment where data is critical.
 
 ## Repositories / Tutorial
 
@@ -33,7 +33,7 @@ Tutorial: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
 Compile Redpill bootloader: https://github.com/uxora-com/rpext
 
 ## Testing Notes
-Personnal testing has been done with ds3615xs jun's loader 1.03b and RedPill (with virtio/9p drivers).
+Personal testing has been done with ds3615xs jun's loader 1.03b and RedPill (with virtio/9p drivers).
 
 - Proxmox Lxc (OK):
 	- Cpu AMD
@@ -102,11 +102,11 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
     uxora/xpenology
 ```
 
-Note0: For full disk passtrough, check tutorial here: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
+Note0: For full disk passthrough, check tutorial here: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
 
 Note1: If you do not want to use BOOTLOADER_URL, copy it as "bootloader.img" to DISK_PATH. In our 2nd example, bootloader should be copied to "/host_dir/kvm/bootloader.img".
 
-Note2: After successfully running this container, you will be able to access the DSM WebUI with docker HOST_IP and port 5000 (ie. 192.168.1.25:5000).
+Note2: After successfully running this container, you will be able to access the DSM WebUI with docker HOST_IP and port 5000 (i.e. 192.168.1.25:5000).
 
 Note3: Log file is stored in `DISK_PATH/log`
 
@@ -122,8 +122,8 @@ Multiples environment variables can be modified to alter default runtime.
 
 * DISK_SIZE:(Default "16") Size of virtual disk in GB
 	* Set DISK_SIZE=0, if you don't want to have a virtual disk
-	* Set more values separated by space, to have more virtual disk (ie. DISK_SIZE="8 16")
-	* It is now possible to pass the full disk device  (ie. DISK_SIZE="8G /dev/sdc")
+	* Set more values separated by space, to have more virtual disk (i.e. DISK_SIZE="8 16")
+	* It is now possible to pass the full disk device  (i.e. DISK_SIZE="8G /dev/sdc")
 
 * DISK_FORMAT: (Default "qcow2") Type of disk format (qcow2 support snapshot), check [here](https://en.wikibooks.org/wiki/QEMU/Images) for more details.
 * DISK_CACHE: (DEPRECATED) Replace by DISK_OPTS_DRV.
@@ -134,7 +134,7 @@ Multiples environment variables can be modified to alter default runtime.
 * DISK_PATH: (Default "/xpy/diskvm") Directory path where disk image (and bootloader) will be stored
 
 
-* BOOTLOADER_URL: (Default "") URL web link of the bootloader (ie. "http://host/path/bootloader.img")
+* BOOTLOADER_URL: (Default "") URL web link of the bootloader (i.e. "http://host/path/bootloader.img")
 	* It can be raw, zip, gzip or tgz file.
 	* If "bootloader.img" file already exists in DISK_PATH, then it skips BOOTLOADER_URL download.
 	* If using docker option: `-v /path/myfile:/bootloader` , then it skips BOOTLOADER_URL download.
@@ -155,13 +155,13 @@ Multiples environment variables can be modified to alter default runtime.
 * VM_ENABLE_9P: (Default "No") Enabling virtio 9p mount point. Need VM_ENABLE_VIRTIO enabled.
 * VM_9P_PATH: (Default "") Directories path of 9p mount point to be shared with xpenology
 	* VM_ENABLE_9P auto enabled
-	* Can set multiple values separated by space (ie. -e VM_9P_PATH="/xpy/share9p /xpy/diskvm")
+	* Can set multiple values separated by space (i.e. -e VM_9P_PATH="/xpy/share9p /xpy/diskvm")
 	* For each value, it will be associated to 9p mount point tag "hostdata0", "hostdata1", ...
-	* Use with -v docker option for each value (ie. -v /host_dir/data:/xpy/share9p)
+	* Use with -v docker option for each value (i.e. -v /host_dir/data:/xpy/share9p)
 * VM_9P_OPTS: (Default "local,security_model=passthrough") 9p fsdev options. Check [here](https://wiki.qemu.org/Documentation/9psetup) for more details.
 
-* VM_CUSTOM_OPTS: (Default "") Additionnal custom option to add to qemu command line
-* VM_CUSTOM_CODE: (Default "") Additionnal custom code to add before qemu command line
+* VM_CUSTOM_OPTS: (Default "") Additional custom option to add to qemu command line
+* VM_CUSTOM_CODE: (Default "") Additional custom code to add before qemu command line
 
 
 * VM_TIMEOUT_POWERDOWN: (Default "30") Timeout for vm-power-down command
@@ -183,7 +183,7 @@ The container has extra defined functions which allow you to manipulate the runn
 - vm-power-reset: Hard Reset the VM (this function doesn't stop the container)
 - vm-snap-create "snapshotName": Create a Live snapshot with memory (work with DISK_FORMAT=qcow2)
 - vm-snap-delete "snapshotName": Delete a Live snapshot
-- vm-snap-restore "snapshotName": stop the VM and restart using the choosed snapshot
+- vm-snap-restore "snapshotName": stop the VM and restart using the chosen snapshot
 - vm-snap-info: Show all the snapshots
 - vm-cmd "command": Send command to qemu monitor, check [here](https://www.qemu.org/docs/master/system/monitor.html) for more details.
 
@@ -309,7 +309,7 @@ $ sudo insmod /volume1/homes/admin/9pnet.ko
 $ sudo insmod /volume1/homes/admin/9pnet_virtio.ko
 $ sudo insmod /volume1/homes/admin/9p.ko
 
-# In DSM web gui, create a "new share folder" in File Station (ie. datashare9p)
+# In DSM web gui, create a "new share folder" in File Station (i.e. datashare9p)
 # then mount 9p hostdata0 to this folder  
 $ sudo mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 hostdata0 /volume1/datashare9p
 $ sudo chown -R :users /volume1/datashare9p
@@ -333,17 +333,17 @@ CAUTION: Most important files are vm disks. As long as you keep it safe, you sho
 	- You should find bootloader and kvm disks on a directory like : `/var/lib/docker/volumes/[...]/_data/` 
 
 If you need to change a bootloader parameter (VM_NET_MAC and GRUBCFG_*):
-- In DISK_PATH (ie. `/host_dir/kvm`) folder, uncompress : `$ tar -xzf bootloader.img.tar.gz`
+- In DISK_PATH (i.e. `/host_dir/kvm`) folder, uncompress : `$ tar -xzf bootloader.img.tar.gz`
 - Then delete: `$ rm bootloader.img.tar.gz bootloader.qcow2`
 - Then follow instructions below for others parameters
 
-Otherwise for all others parameters :
+Otherwise, for all others parameters :
 - Delete or Rename your old container: `$ docker container rm $( docker container ls -qf 'ancestor=uxora/xpenology' )`
 - Then recreate a container with new parameters: `$ docker run [...]`
 
-## TroubleShooting
+## Troubleshooting
 
-* Normally privileged mode (`--privileged`) is not needed but you may try it to see if it does not work on your system.
+* Normally privileged mode (`--privileged`) is not needed, but you may try it to see if it does not work on your system.
 	
 #### If you get the following error from KVM:
 ```
@@ -363,7 +363,7 @@ $ modprobe vhost-net
 cpage out of range (5)
 processing error - resetting ehci HC
 ```
-* If this happen to you simple reboot the container
+* If this happens to you, reboot the container
 
 	
 #### If you have permission issue with /dev/kvm or /dev/net/tun, give other +rw permission in host
