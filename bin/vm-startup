@@ -207,7 +207,7 @@ if [[ -f ${BOOTLOADER_ALT_PATH} ]] && [[ ! -f ${BOOTLOADER_FULLPATH} ]]; then
 fi
 
 if [[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] ; then
-	log "INFO" "SKIP download URL: gzip bootloader already exist: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
+	log "INFO" "SKIP download URL: gzip bootloader already exists: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
 	
 	if [[ -f ${BOOTLOADER_FULLPATH} ]] || [[ -f ${BOOTLOADER_FULLPATH%.img}.qcow2 ]]; then
 		log "INFO" "... SKIP grub.cfg modification: bootloader already exists."
@@ -217,7 +217,7 @@ if [[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] ; then
 		tar -xzOf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} $( tar -tzf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} | head -1 ) > ${BOOTLOADER_FULLPATH}.tmp
 	fi
 elif [[ -f ${BOOTLOADER_FULLPATH} ]] ; then
-	log "INFO" "SKIP download URL: raw bootloader already exist: ${BOOTLOADER_FULLPATH}"
+	log "INFO" "SKIP download URL: bootloader file already exists: ${BOOTLOADER_FULLPATH}"
 	mv ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH}.tmp
 elif [[ "x${BOOTLOADER_URL}" != "x" ]] ; then
 	log "INFO" "Start downloading bootloader from URL: ${BOOTLOADER_URL} ..."
@@ -286,7 +286,7 @@ if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 		log "INFO" "... SKIP: bootloader ${DISK_FORMAT} already exists: ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}"
 	fi
 	
-	# delete img bootloader if bak exist
+	# delete img bootloader if bak exists
 	[[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] \
 		&& rm -f ${BOOTLOADER_FULLPATH}
 
