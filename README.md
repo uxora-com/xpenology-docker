@@ -344,7 +344,7 @@ Otherwise for all others parameters :
 
 ## TroubleShooting
 
-* Privileged mode (`--privileged`) is needed in order for KVM to access to macvtap devices
+* Normally privileged mode (`--privileged`) is not needed but you may try it to see if it does not work on your system.
 	
 #### If you get the following error from KVM:
 ```
