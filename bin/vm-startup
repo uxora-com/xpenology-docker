@@ -25,21 +25,23 @@ exec &> >(tee -a ${DISK_PATH}/log/xpenodock$(date "+_%Y%m%d_%H%M%S").log)
 : ${DISK_OPTS_DEV:='rotation_rate=1'}
 : ${DISK_PATH:='/xpy/diskvm'}
 
-: ${VM_NET_TAP:=""}
-: ${VM_NET_IP:="20.20.20.21"}
-: ${VM_NET_MAC:="00:11:32:2C:A7:85"}
-: ${VM_NET_DHCP:="N"}
+: ${VM_NET_TAP:=''}
+: ${VM_NET_IP:='20.20.20.21'}
+: ${VM_NET_MAC:='00:11:32:2C:A7:85'}
+: ${VM_NET_DHCP:='N'}
 
-: ${VM_ENABLE_VIRTIO:="Y"}
-: ${VM_ENABLE_VIRTIO_SCSI:="N"}
-: ${VM_ENABLE_9P:="N"}
-: ${VM_ENABLE_VGA:="N"}
+: ${VM_ENABLE_VIRTIO:='Y'}
+: ${VM_ENABLE_VIRTIO_SCSI:='N'}
+: ${VM_ENABLE_9P:='N'}
+: ${VM_ENABLE_VGA:='N'}
 
 : ${VM_9P_PATH:=''}
 : ${VM_9P_OPTS:='local,security_model=passthrough'}
 
-: ${BOOTLOADER_URL:='http://host/path/bootloader.img'}
+: ${BOOTLOADER_URL:=''}
 : ${BOOTLOADER_AS_USB:='Y'}
+: ${BOOTLOADER_FORCE_REPLACE:='N'}
+: ${BOOTLOADER_ALT_PATH:='/bootloader'}
 
 : ${GRUBCFG_AUTO:='Y'}
 : ${GRUBCFG_VID:=''}
@@ -187,26 +189,55 @@ fi
 
 BOOTLOADER_FULLPATH="${DISK_PATH%/}/bootloader.img"
 BOOTLOADER_BAK_EXT=".tar.gz"
-
 flag_bootl_err=0
+
+if [[ "${BOOTLOADER_FORCE_REPLACE}" == [Yy1]* ]]; then
+	[[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] \
+		&& mkdir -p ${DISK_PATH%/}/bak \
+		&& mv -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ${DISK_PATH%/}/bak/.
+	rm -f ${BOOTLOADER_FULLPATH%.img}.qcow2
+	if [[ "x${BOOTLOADER_URL}" != "x" ]] || [[ -f ${BOOTLOADER_ALT_PATH} ]]; then
+		rm -f ${BOOTLOADER_FULLPATH}
+	fi
+fi
+
+if [[ -f ${BOOTLOADER_ALT_PATH} ]] && [[ ! -f ${BOOTLOADER_FULLPATH} ]]; then
+	log "INFO" "ALT bootloader file found: copy to ${BOOTLOADER_FULLPATH}"
+	cp ${BOOTLOADER_ALT_PATH} ${BOOTLOADER_FULLPATH}
+fi
+
 if [[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] ; then
-	log "INFO" "SKIP download URL: gzip bootloader already exist: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
-	log "INFO" "SKIP grub.cfg modification: gzip bootloader already exist: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
-	flag_bootl_err=1
+	log "INFO" "SKIP download URL: gzip bootloader already exists: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
+	
+	if [[ -f ${BOOTLOADER_FULLPATH} ]] || [[ -f ${BOOTLOADER_FULLPATH%.img}.qcow2 ]]; then
+		log "INFO" "... SKIP grub.cfg modification: bootloader already exists."
+		flag_bootl_err=1
+	else
+		log "INFO" "... raw/qcow2 bootloader does not exist. Extracting tgz file."
+		tar -xzOf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} $( tar -tzf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} | head -1 ) > ${BOOTLOADER_FULLPATH}.tmp
+	fi
 elif [[ -f ${BOOTLOADER_FULLPATH} ]] ; then
-	log "INFO" "SKIP download URL: raw bootloader already exist: ${BOOTLOADER_FULLPATH}"
-else
+	log "INFO" "SKIP download URL: bootloader file already exists: ${BOOTLOADER_FULLPATH}"
+	mv ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH}.tmp
+elif [[ "x${BOOTLOADER_URL}" != "x" ]] ; then
 	log "INFO" "Start downloading bootloader from URL: ${BOOTLOADER_URL} ..."
 	wget --no-check-certificate -q --show-progress --progress=dot:giga ${BOOTLOADER_URL} -O ${BOOTLOADER_FULLPATH}.tmp \
 		&& echo "" && log "INFO" "... SUCCESS: file downloaded from URL." \
-		|| ( log "ERROR" "... FAILED: file cannot be downloaded from URL." && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 10 )
+		|| ( log "ERROR" "... FAILED: file cannot be downloaded from URL." && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 4 )
+else
+	log "ERROR" "NO BOOTLOADER_URL, NO BOOTLOADER_ALT_PATH and NO ${BOOTLOADER_FULLPATH} file found. Exiting."
+	exit 5
+fi
 
+if [[ -f ${BOOTLOADER_FULLPATH}.tmp ]] ; then
 	if [[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c ": gzip" ) -eq 1 ]]; then
 		log "INFO" "Downloaded file is detected as gzip file, extracting ..."
-		tar -xzOf ${BOOTLOADER_FULLPATH}.tmp $( tar -tzf ${BOOTLOADER_FULLPATH}.tmp | head -1 ) > ${BOOTLOADER_FULLPATH}.tmp2
+		tar -xzOf ${BOOTLOADER_FULLPATH}.tmp $( tar -tzf ${BOOTLOADER_FULLPATH}.tmp | head -1 ) > ${BOOTLOADER_FULLPATH}.tmp2 \
+			|| ( log "ERROR" "... FAILED extracting gzip file." && exit 6 )
 	elif [[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c ": Zip" ) -eq 1 ]]; then
 		log "INFO" "Downloaded file is detected as zip file, extracting ..."
-		unzip -p ${BOOTLOADER_FULLPATH}.tmp $( unzip -l ${BOOTLOADER_FULLPATH}.tmp | head -4 | tail -1 | awk '{print $4}' ) > ${BOOTLOADER_FULLPATH}.tmp2
+		unzip -p ${BOOTLOADER_FULLPATH}.tmp $( unzip -l ${BOOTLOADER_FULLPATH}.tmp | head -4 | tail -1 | awk '{print $4}' ) > ${BOOTLOADER_FULLPATH}.tmp2 \
+			|| ( log "ERROR" "... FAILED extracting zip file." && exit 7 )
 	fi
 	
 	[[ -f ${BOOTLOADER_FULLPATH}.tmp2 ]] && mv -f ${BOOTLOADER_FULLPATH}.tmp2 ${BOOTLOADER_FULLPATH}.tmp
@@ -214,7 +245,7 @@ else
 	[[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c "boot sector" ) -eq 1 ]] \
 		&& log "INFO" "Downloaded file seems bootable! Good good!" \
 		&& mv ${BOOTLOADER_FULLPATH}.tmp ${BOOTLOADER_FULLPATH} \
-		|| ( log "ERROR" "Downloaded file is not bootable!" && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 11 )
+		|| ( log "ERROR" "Downloaded file is not bootable!" && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 8 )
 fi
 
 [[ $( ls -l ${BOOTLOADER_FULLPATH}.tmp* 2>/dev/null | wc -l ) -ne 0 ]] && rm -f ${BOOTLOADER_FULLPATH}.tmp*
@@ -223,7 +254,7 @@ fi
 # grub.cfg modification
 if [[ $flag_bootl_err -eq 0 ]]; then
 	log "INFO" "Backing up bootloader: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
-	tar -czf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} -C ${BOOTLOADER_FULLPATH%/*} ${BOOTLOADER_FULLPATH##*/} 
+	[[ ! -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] && tar -czf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} -C ${BOOTLOADER_FULLPATH%/*} ${BOOTLOADER_FULLPATH##*/} 
 	
 	log "INFO" "Modification of grub.cfg ..."
 	
@@ -250,12 +281,12 @@ if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 	if [[ ! -f ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT} ]]; then
 		qemu-img convert -f raw -O ${DISK_FORMAT} ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT} \
 			&& log "INFO" "... SUCCESS: Bootloader has been converted to ${DISK_FORMAT}: ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}" \
-			|| ( log "ERROR" "... FAILED: Cannot convert Bootloader to ${DISK_FORMAT}. Exiting." && exit 20 )
+			|| ( log "ERROR" "... FAILED: Cannot convert Bootloader to ${DISK_FORMAT}. Exiting." && exit 10 )
 	else
 		log "INFO" "... SKIP: bootloader ${DISK_FORMAT} already exists: ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}"
 	fi
 	
-	# delete img bootloader if bak exist
+	# delete img bootloader if bak exists
 	[[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] \
 		&& rm -f ${BOOTLOADER_FULLPATH}
 
@@ -324,14 +355,14 @@ for size in $DISK_SIZE ; do
 		if [[ ! -f ${fpath_diskname_} ]]; then
 			qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} ${size%[Gg]}G \
 				&& log "INFO" "... SUCCESS: ${DISK_FORMAT} disk created: ${fpath_diskname_}" \
-				|| (log "ERROR" "... FAILED: Cannot create disk" && exit 13)
+				|| (log "ERROR" "... FAILED: Cannot create disk" && exit 12)
 		else
 			log "INFO" "... SKIP: ${DISK_FORMAT} disk already exists: ${fpath_diskname_}"
 		fi
 		((++i))
 	else
 		log "ERROR" "... ARG: invalid argument : $size"	
-		exit 30
+		exit 14
 	fi
 	
 	if [[ "${VM_ENABLE_VIRTIO_SCSI}" == [YySs12]* ]]; then
@@ -428,7 +459,7 @@ if [[ "x${VM_NET_TAP}" == "x" ]]; then
 		_DhcpIP=$( dhclient -v ${VM_NET_TAP} 2>&1 | grep ^bound | cut -d' ' -f3 )
 		[[ "${_DhcpIP}" == [0-9.]* ]] \
 		&& log "INFO" "... Retrieve IP: ${_DhcpIP} from DHCP with MAC: ${VM_NET_MAC}" \
-		|| ( log "ERROR" "... Cannot retrieve IP from DHCP with MAC: ${VM_NET_MAC}" && exit 14 )
+		|| ( log "ERROR" "... Cannot retrieve IP from DHCP with MAC: ${VM_NET_MAC}" && exit 16 )
 
 		ip a flush ${VM_NET_TAP}
 		
@@ -439,7 +470,7 @@ if [[ "x${VM_NET_TAP}" == "x" ]]; then
 		
 		[[ "x${MAJOR}" != "x" ]] \
 			&& log "INFO" "... PLEASE MAKE SURE, Docker run command line used: --device-cgroup-rule='c ${MAJOR}:* rwm'" \
-			|| ( log "ERROR" "... macvtap creation issue: Cannot find: /sys/class/net/${VM_NET_TAP}/" && exit 15 )
+			|| ( log "ERROR" "... macvtap creation issue: Cannot find: /sys/class/net/${VM_NET_TAP}/" && exit 18 )
 		
 		[[ ! -e ${_tmpTapPath} ]] && [[ -e /dev0/${_tmpTapPath##*/} ]] && ln -s /dev0/${_tmpTapPath##*/} ${_tmpTapPath}
 		
@@ -447,7 +478,7 @@ if [[ "x${VM_NET_TAP}" == "x" ]]; then
 			log "WARNING" "... file does not exist: ${_tmpTapPath}"
 			mknod ${_tmpTapPath} c $MAJOR $MINOR \
 				&& log "INFO" "... File created with mknod: ${_tmpTapPath}" \
-				|| ( log "ERROR" "... Cannot mknod: ${_tmpTapPath}" && exit 16 )
+				|| ( log "ERROR" "... Cannot mknod: ${_tmpTapPath}" && exit 20 )
 		fi
 		KVM_NET_OPTS="-netdev tap,id=hostnet0,vhost=on,vhostfd=40,fd=30 30<>${_tmpTapPath} 40<>/dev/vhost-net"
 	else

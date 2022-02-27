@@ -1,9 +1,9 @@
 FROM uxora/debian-kvm
 LABEL maintainer="Michel VONGVILAY <https://www.uxora.com/about/me#contact-form>"
-LABEL version="0.8"
+LABEL version="0.9"
 
 
-ENV SCRIPT_VERSION "0.8"
+ENV SCRIPT_VERSION "0.9"
 
 # Ressources
 ENV CPU "qemu64"
@@ -14,6 +14,8 @@ ENV RAM "512"
 #Bootloader
 ENV BOOTLOADER_URL ""
 ENV BOOTLOADER_AS_USB "Y"
+ENV BOOTLOADER_FORCE_REPLACE "N"
+ENV BOOTLOADER_ALT_PATH "/bootloader"
 
 #Disk
 ENV DISK_SIZE "16"
@@ -28,7 +30,7 @@ ENV DISK_PATH "/xpy/diskvm"
 # # (VM_NET_IP: Dont need to change coz all is port forwarded) 
 # # (VM_NET_MAC: Correspond to MAC bootloader, so it will be set to GRUBCFG_MAC1 aswell)
 # # (VM_NET_DHCP: It use MACVTAP which is not compatible with all configuration)
-ENV VM_NET_IP 20.20.20.21
+ENV VM_NET_IP "20.20.20.21"
 ENV VM_NET_MAC "00:11:32:2C:A7:85"
 ENV VM_NET_DHCP "N"
 
@@ -62,18 +64,17 @@ ENTRYPOINT /usr/bin/vm-startup
 # Using uxora/devian-kvm baseline image
 # Installing some more tools
 ARG DEBIAN_FRONTEND=noninteractive
-RUN \
-  apt-get update && \
-  apt-get install -y --no-install-recommends ethtool file netcat unzip vim-tiny isc-dhcp-client iputils-ping && \
-  apt-get autoclean && \
-  apt-get autoremove && \
-  rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ethtool file netcat unzip vim-tiny isc-dhcp-client iputils-ping && \
+    apt-get autoclean && \
+    apt-get autoremove && \
+    rm -rf /var/lib/apt/lists/*
 
 # RUN mkdir -p /qemu_cfg
 
 COPY bin cfg /qemu_cfg/
 
 RUN chmod -R +x /qemu_cfg/vm-* \
-        && mv /qemu_cfg/vm-* /usr/bin/. \
-        && echo "INF: shell scripts have been sucessfully copied to /usr/bin" \
-        || ( echo "ERR: Something get wrong with shell scripts!" && exit 255 )
+    && mv /qemu_cfg/vm-* /usr/bin/. \
+    && echo "INF: shell scripts have been sucessfully copied to /usr/bin" \
+    || ( echo "ERR: Something get wrong with shell scripts!" && exit 255 )
