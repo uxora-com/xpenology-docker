@@ -60,10 +60,10 @@ If you have any issue, please raise it in "issues" area.
 ## Features
 
 This image provides some special features to get the VM running as straightforward as possible
-- VM NAT (default): NAT + Port Forwarding, access DSM with "DOCKER_HOST_IP:5000"
-- VM Fixed IP: NAT + Port Forwarding and fixed IP with macvlan "FIXED_IP:5000" (see Notes section below)
-- VM DHCP: DHCP with macvtap "DHCP_IP:5000" (see Notes section below)
-- Live Snapshoting: Create and restore (pretty useful to test update)
+- VM NAT (default): NAT + Port Forwarding: "DOCKER_HOST_IP:5000" (port 5000 can be different depends on your ports mapping)
+- VM Fixed IP: NAT + Port Forwarding + fixed IP with macvlan: "FIXED_IP:5000" (see Notes section below)
+- VM DHCP: DHCP with macvtap: "DHCP_IP:5000" (see Notes section below)
+- Live Snapshot: Create and restore (pretty useful to test update)
 - 9P Mountpoints (Access host docker volumes from Xpenology)
 
 
