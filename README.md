@@ -416,7 +416,3 @@ Michel VONGVILAY ([www.uxora.com](https://www.uxora.com/about/me#contact-form))
 Project based on :
 * Isaac Aymerich - [segator/xpenology-docker](https://github.com/segator/xpenology-docker)
 * BBVA Innotech - [BBVA/kvm](https://github.com/BBVA/kvm)
-
-## Want to buy me a coffee
-* ERC20/BEP20 : 0xD861bc743495b2f1b00Cd420092d548833369756
-* BTC: bc1qzjg4t55ljcr3vmdegh2c85xgejk89xqw0m3pxc
