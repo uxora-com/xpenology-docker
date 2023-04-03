@@ -493,7 +493,11 @@ if [[ "x${VM_NET_TAP}" == "x" ]]; then
 		domainname=$(echo $searchdomains | awk -F"," '{print $1}')
 
 		for nameserver in "${nameservers[@]}"; do
-		  [[ -z $DNS_SERVERS ]] && DNS_SERVERS=$nameserver || DNS_SERVERS="$DNS_SERVERS,$nameserver"
+		  if [[ $nameserver =~ .*:.* ]]; then
+		    log "INFO" "Skipping IPv6 nameserver: $nameserver"
+		  else
+		    [[ -z $DNS_SERVERS ]] && DNS_SERVERS=$nameserver || DNS_SERVERS="$DNS_SERVERS,$nameserver"
+		  fi
 		done
 		DNSMASQ_OPTS="$DNSMASQ_OPTS                         \
 		  --dhcp-option=option:dns-server,$DNS_SERVERS      \
