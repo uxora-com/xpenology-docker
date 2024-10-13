@@ -250,7 +250,7 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
 $ docker network create -d macvlan \
     --subnet=192.168.0.0/24 \
     --gateway=192.168.0.1 \
-    --ip-range=192.168.0.100/28 \
+    --ip-range=192.168.0.96/28 \
     -o parent=eth0 \
     macvlan0
 
@@ -259,7 +259,7 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
     --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 \
     --device=/dev/net/tun --device=/dev/kvm \
     --network macvlan0 --ip=192.168.0.100 \
-    -e BOOTLOADER_URL="http://myurl/synoboot.tgz" \
+    -e BOOTLOADER_URL="https://github.com/RROrg/rr/releases/download/24.10.0/rr-24.10.0.img.zip" \
     -e RAM="2048" -e DISK_SIZE="32G" \
     -e DISK_PATH="/xpy/diskvm" -e VM_9P_PATH="/xpy/share9p" \
     -v /host_dir/kvm:/xpy/diskvm -v /host_dir/data:/xpy/share9p \
@@ -273,13 +273,13 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
 $ docker network create -d macvlan \
     --subnet=192.168.0.0/24 \
     --gateway=192.168.0.1 \
-    --ip-range=192.168.0.100/28 \
+    --ip-range=192.168.0.96/28 \
     -o parent=eth0 \
     macvlan0
 
 # Run xpenology docker (Warning: --device-cgroup-rule number may be different for you)
 $ docker run --name="xpenodock" --hostname="xpenodock" \
-    --cap-add=NET_ADMIN --device-cgroup-rule='c 235:* rwm' \
+    --cap-add=NET_ADMIN --device-cgroup-rule='c 239:* rwm' \
     --device=/dev/net/tun --device=/dev/kvm --device=/dev/vhost-net \
     --network macvlan0 -e VM_NET_DHCP="Y" \
     -e BOOTLOADER_URL="https://github.com/RROrg/rr/releases/download/24.10.0/rr-24.10.0.img.zip" \
