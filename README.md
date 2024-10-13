@@ -2,12 +2,12 @@
 
 KVM VirtualMachine of Xpenology DSM running in a docker container, which can be run directly from docker-hub by specifying a BOOTLOADER_URL or a local file.
 
-This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3/7.0.1 with jun and redpill bootloader.
+This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3/7.2 with jun and redpill bootloader.
 So technically it can run any bootloader you provide.
 
 Latest tested (for DS3615xs):
 - 6.2.3 with Jun's 1.03b (virtio+9p)
-- rr 24.10 (virtio+9p) from https://github.com/RROrg/rr/releases/download/24.10.0/rr-24.10.0.img.zip
+- 7.2 with rr 24.10 (virtio+9p) from https://github.com/RROrg/rr
 
 UPDATE:
 - PID, VID and SN (Serial Number) can now be pass as parameter to Docker, the bootloader is modified during the first boot. (work with Jun's bootloader)
