@@ -1,63 +1,64 @@
 #!/bin/bash
 set -e
-mkdir -p ${DISK_PATH}/log ${VM_9P_PATH}
-exec &> >(tee -a ${DISK_PATH}/log/xpenodock$(date "+_%Y%m%d_%H%M%S").log)
+mkdir -p "${DISK_PATH}"/log ${VM_9P_PATH}
+exec &> >(tee -a "${DISK_PATH}"/log/xpenodock"$(date "+_%Y%m%d_%H%M%S")".log)
 
 # This entrypoint for KVM container configures and attaches network bridges to
 # the VM and starts KVM with the selected options.
 
 # See Dockerfile reference and README.md for further info.
 
-: ${LAUNCHER:='qemu-system-x86_64'}
-: ${DNSMASQ_CONF_DIR:='/etc/dnsmasq.d'}
-: ${DNSMASQ:='/usr/sbin/dnsmasq'}
-: ${QEMU_CONF_DIR:='/etc/qemu-kvm'}
-: ${DISABLE_VGA:='Y'}
+: "${LAUNCHER:="qemu-system-x86_64"}"
+: "${DNSMASQ_CONF_DIR:="/etc/dnsmasq.d"}"
+: "${DNSMASQ:="/usr/sbin/dnsmasq"}"
+: "${QEMU_CONF_DIR:="/etc/qemu-kvm"}"
+: "${DISABLE_VGA:="Y"}"
 
-: ${CPU:='qemu64'}
-: ${THREADS:='1'}
-: ${CORES:='1'}
-: ${RAM:='2048'}
+: "${CPU:="qemu64"}"
+: "${THREADS:="1"}"
+: "${CORES:="1"}"
+: "${RAM:="2048"}"
 
-: ${DISK_SIZE:='16'}
-: ${DISK_FORMAT:='qcow2'}
-: ${DISK_OPTS_DRV:='cache=writeback,discard=on,aio=threads,detect-zeroes=on'}
-: ${DISK_OPTS_DEV:='rotation_rate=1'}
-: ${DISK_PATH:='/xpy/diskvm'}
+: "${DISK_SIZE:="16"}"
+: "${DISK_FORMAT:="qcow2"}"
+: "${DISK_OPTS_DRV:="cache=writeback,discard=on,aio=threads,detect-zeroes=on"}"
+: "${DISK_OPTS_DEV:="rotation_rate=1"}"
+: "${DISK_PATH:="/xpy/diskvm"}"
 
-: ${VM_NET_TAP:=''}
-: ${VM_NET_IP:='20.20.20.21'}
-: ${VM_NET_MAC:='00:11:32:2C:A7:85'}
-: ${VM_NET_DHCP:='N'}
+: "${VM_NET_TAP:=""}"
+: "${VM_NET_IP:="20.20.20.21"}"
+: "${VM_NET_MAC:="00:11:32:2C:A7:85"}"
+: "${VM_NET_DHCP:="N"}"
 
-: ${VM_ENABLE_VIRTIO:='Y'}
-: ${VM_ENABLE_VIRTIO_SCSI:='N'}
-: ${VM_ENABLE_9P:='N'}
-: ${VM_ENABLE_VGA:='N'}
+: "${VM_ENABLE_VIRTIO:="Y"}"
+: "${VM_ENABLE_VIRTIO_SCSI:="N"}"
+: "${VM_ENABLE_9P:="N"}"
+: "${VM_ENABLE_VGA:="Y"}"
 
-: ${VM_9P_PATH:=''}
-: ${VM_9P_OPTS:='local,security_model=passthrough'}
+: "${VM_9P_PATH:=""}"
+: "${VM_9P_OPTS:="local,security_model=passthrough"}"
 
-: ${BOOTLOADER_URL:=''}
-: ${BOOTLOADER_AS_USB:='Y'}
-: ${BOOTLOADER_FORCE_REPLACE:='N'}
-: ${BOOTLOADER_ALT_PATH:='/bootloader'}
+: "${BOOTLOADER_URL:=""}"
+: "${BOOTLOADER_AS_USB:="Y"}"
+: "${BOOTLOADER_FORCE_REPLACE:="N"}"
+: "${BOOTLOADER_ALT_PATH:="/bootloader"}"
 
-: ${GRUBCFG_AUTO:='Y'}
-: ${GRUBCFG_VID:=''}
-: ${GRUBCFG_PID:=''}
-: ${GRUBCFG_SN:=''}
-: ${GRUBCFG_DISKIDXMAP:=''}
-: ${GRUBCFG_SATAPORTMAP:=''}
-: ${GRUBCFG_SASIDXMAP:=''}
-: ${GRUBCFG_HDDHOTPLUG:=''}
-: ${GRUBCFG_MAC1:=''}
+: "${GRUBCFG_ENABLE_MOD:="N"}"
+: "${GRUBCFG_VID:=""}"
+: "${GRUBCFG_PID:=""}"
+: "${GRUBCFG_SN:=""}"
+: "${GRUBCFG_DISKIDXMAP:=""}"
+: "${GRUBCFG_SATAPORTMAP:=""}"
+: "${GRUBCFG_SASIDXMAP:=""}"
+: "${GRUBCFG_HDDHOTPLUG:=""}"
+: "${GRUBCFG_MAC1:=""}"
 
-: ${VM_CUSTOM_OPTS:=''}
-: ${VM_CUSTOM_CODE:=''}
-: ${VM_CUSTOM_BOOTWAIT:='10'}
+: "${VM_CUSTOM_OPTS:=""}"
+: "${VM_CUSTOM_CODE:=""}"
+: "${VM_CUSTOM_BOOTWAIT:="5"}"
+: "${VM_CUSTOM_VM_FREERAM_MIN:="256"}"
 
-: ${DEBUG:='Y'}
+: "${DEBUG:="Y"}"
 
 
 # Functions
@@ -69,9 +70,7 @@ log () {
       echo "$1: ${@:2}"
       ;;
     DEBUG)
-      if [[ "$DEBUG" == [Yy1]* ]]; then
-          echo "$1: ${@:2}"
-      fi
+      [[ "$DEBUG" == [Yy1]* ]] && echo "$1: ${@:2}"
       ;;
     *)
       echo "-- $@"
@@ -80,16 +79,19 @@ log () {
 }
 
 setupLocalDhcp () {
-  CIDR="24"
   MAC="$1"
   IP="$2"
+  CIDR="24"
   #HOSTNAME=$(hostname -s)
-  HOSTNAME="VirtualMachine"
+  : "${HOSTNAME:="DockerContainer"}"
   # dnsmasq configuration:
   log "INFO" "DHCP configured to serve IP $IP/$CIDR via dockerbridge"
   DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-range=$IP,$IP --dhcp-host=$MAC,,$IP,$HOSTNAME,infinite --dhcp-option=option:netmask,255.255.255.0"
   # Create lease File FOr faster resolve
-  echo "0 $MAC $IP $HOSTNAME 01:${MAC}" > /var/lib/misc/dnsmasq.leases
+  
+  touch /var/lib/misc/dnsmasq.leases
+  grep -qi "$MAC" /var/lib/misc/dnsmasq.leases \
+    || echo "0 $MAC $IP $HOSTNAME 01:${MAC}" > /var/lib/misc/dnsmasq.leases
   chmod 644 /var/lib/misc/dnsmasq.leases
 }
 
@@ -98,24 +100,35 @@ setupLocalDhcp () {
 configureNatNetworks () {
   #For now we define static MAC because DHCP is very slow if MAC change every VM Boot
   #Create bridge with static IP for the VM Guest(COnnection VM-Docker)
-  brctl addbr dockerbridge
-  ip addr add ${VM_NET_IP%.*}.1/24 broadcast ${VM_NET_IP%.*}.255 dev dockerbridge
-  ip link set dockerbridge up
+  log "INFO" "configureNatNetworks"
+  : "${ETH0:="eth0"}"
+  if ! (brctl show | grep -qi -e dockerbridge); then
+    log "INFO" "... creating bridge: dockerbridge"
+	brctl addbr dockerbridge
+    ip addr add "${VM_NET_IP%.*}".1/24 broadcast "${VM_NET_IP%.*}".255 dev dockerbridge
+    ip link set dockerbridge up
+  fi
+  
   #QEMU Works with taps, set tap to the bridge created
-  ip tuntap add dev ${VM_NET_TAP} mode tap
-  ip link set ${VM_NET_TAP} up promisc on
-  brctl addif dockerbridge ${VM_NET_TAP}
-
+  if ! (ip l | grep -qi -e ${VM_NET_TAP}); then
+    log "INFO" "... creating tap: ${VM_NET_TAP}"
+    ip tuntap add dev "${VM_NET_TAP}" mode tap
+    ip link set "${VM_NET_TAP}" up promisc on
+    brctl addif dockerbridge "${VM_NET_TAP}"
+  fi
+  
   #Add internet connection to the VM
-  iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-  iptables -t nat -A PREROUTING -i eth0 -p tcp  -j DNAT --to $VM_NET_IP
-  iptables -t nat -A PREROUTING -i eth0 -p udp  -j DNAT --to $VM_NET_IP
+  log "INFO" "... set NAT with iptables"
+  iptables -t nat -A POSTROUTING -o "${ETH0}" -j MASQUERADE
+  iptables -t nat -A PREROUTING -i "${ETH0}" -p tcp  -j DNAT --to "${VM_NET_IP}"
+  iptables -t nat -A PREROUTING -i "${ETH0}" -p udp  -j DNAT --to "${VM_NET_IP}"
   
   #Enable port forwarding flag
+  log "INFO" "... set port forwarding"
   [[ $(< /proc/sys/net/ipv4/ip_forward) -eq 0 ]] && sysctl -w net.ipv4.ip_forward=1
   
   #For now we define static MAC because DHCP is very slow if DHCP change every VM Boot
-  setupLocalDhcp $VM_NET_MAC $VM_NET_IP
+  setupLocalDhcp "${VM_NET_MAC}" "${VM_NET_IP}"
 }
 
 ddReplaceInFile () {
@@ -127,24 +140,24 @@ ddReplaceInFile () {
 	_tmpStr="${_tmpSearch}${_tmpReplace}"
 	
 	[[ ${_tmpMode} -eq 0 ]] \
-	  && _tmpRes="$( grep -oba "${_tmpSearch}[[:alnum:]]\{${#_tmpReplace}\}" ${_tmpFile} )" \
-	  || _tmpRes="$( grep -oba "${_tmpSearch}[[:alnum:]]\+" ${_tmpFile} )"
+	  && _tmpRes="$( grep -oba "${_tmpSearch}[[:alnum:]]\{${#_tmpReplace}\}" "${_tmpFile}" )" \
+	  || _tmpRes="$( grep -oba "${_tmpSearch}[[:alnum:]]\+" "${_tmpFile}" )"
 	
 	log "INFO" "ddReplace for: ${_tmpStr}"
 	
 	if [[ "x${_tmpRes}" != "x" ]]; then
 		for i in ${_tmpRes}; do
-			_tmpCnt="$( printf ${i#*:} | wc -c )"
+			_tmpCnt="$( echo "${i#*:}" | wc -c )"
 			
 			[[ ${_tmpMode} -eq 0 ]] && [[ ${#_tmpStr} -ne ${_tmpCnt} ]] \
 				&& log "WARNING" "... Nb of char is not equal: ${#_tmpStr} =/= ${i#*:}" && continue
 			
-			[[ "x${_tmpStr}" == "x${i#*:}" ]] \
+			[[ "${_tmpStr}" == "${i#*:}" ]] \
 				&& log "INFO" "... No need to change: value is the same!" && continue
 			
-			printf "%-${_tmpCnt}s" "${_tmpStr}" | dd of=${_tmpFile} conv=notrunc bs=1 seek=${i%:*} count=${_tmpCnt} >/dev/null 2>&1
+			printf "%-${_tmpCnt}s" "${_tmpStr}" | dd of="${_tmpFile}" conv=notrunc bs=1 seek="${i%:*}" count="${_tmpCnt}" >/dev/null 2>&1
 			
-			[[ $( grep -oba "${_tmpStr}" ${_tmpFile} | wc -l ) -gt 0 ]] \
+			[[ $( grep -oba "${_tmpStr}" "${_tmpFile}" | wc -l ) -gt 0 ]] \
 				&& log "INFO" "... Successful replacement of: ${i#*:}" \
 				|| log "WARNING" "... Unsuccessful: Reason unknown!"
 		done
@@ -159,7 +172,7 @@ ddReplaceInFile () {
 # ######################################
 # ######################################
 
-log "INFO" "Xpenology docker V${SCRIPT_VERSION} is starting [pid:${$}] ..."
+log "INFO" "Xpenology docker V${SCRIPT_VERSION} TEST is starting [pid:${$}] ..."
 
 # DEPRECATED
 [[ "x${VM_PATH_9P}" != "x" ]] \
@@ -174,11 +187,33 @@ update-alternatives --set iptables /usr/sbin/iptables-legacy
 update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 
-if [[ "${GRUBCFG_AUTO}" == [Yy1]* ]] && [[ "x${GRUBCFG_VID}" == "x" ]] && [[ "x${GRUBCFG_PID}" == "x" ]]; then
-	[[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]] && GRUBCFG_VID='46f4' && GRUBCFG_PID='0001'
+# Check host OS type
+if [[ "${VM_NET_DHCP}" == [Yy1]* ]] && uname -a | grep -q -i -e microsoft -e darwin ; then
+	log "WARNING" "BE AWARE that VM_NET_DHCP=Y may probably not work on WINDOWS or MacOS!!!"
+	log "WARNING" "PLEASE set VM_NET_DHCP=N if it DOES NOT WORK..."
+	#[[ "${VM_NET_DHCP}" == [Yy1]* ]] \
+	#	&& log "WARNING" "... VM_NET_DHCP=Y is not compatible with host OS: Set VM_NET_DHCP to N." \
+	#	&& VM_NET_DHCP="N"
 fi
 
-[[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]] && VM_ENABLE_VIRTIO="Y"
+
+if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]]; then
+	log "INFO" "Check virtio host capability ..."
+	#set +e
+	#modprobe virtio 2>&1 >/dev/null
+	#modprobe virtio_blk 2>&1 >/dev/null
+	#modprobe virtio_net 2>&1 >/dev/null
+	#set -e
+	if ! ( find /sys/bus -name "*virtio*" | grep -qi -e virtio_net -e virtio_blk ); then
+		log "WARNING" "... VIRTIO has not been detected. Please set VM_ENABLE_VIRTIO=N, if it does not work !"
+		#VM_ENABLE_VIRTIO="N"
+	fi
+fi
+
+[[ "${VM_ENABLE_VIRTIO_SCSI}" == [Yy1]* ]] && [[ "${VM_ENABLE_VIRTIO}" == [Nn0]* ]] \
+	&& log "WARNING" "... VM_ENABLE_VIRTIO=N : Set VM_ENABLE_VIRTIO_SCSI to N." \
+	&& VM_ENABLE_VIRTIO_SCSI=N
+
 [[ "x${VM_9P_PATH}" != "x" ]] && VM_ENABLE_9P="Y"
 
 [[ "x${DISK_OPTS_DRV}" != "x" ]] && DISK_OPTS_DRV=",${DISK_OPTS_DRV#,}"
@@ -193,17 +228,17 @@ flag_bootl_err=0
 
 if [[ "${BOOTLOADER_FORCE_REPLACE}" == [Yy1]* ]]; then
 	[[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] \
-		&& mkdir -p ${DISK_PATH%/}/bak \
-		&& mv -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ${DISK_PATH%/}/bak/.
-	rm -f ${BOOTLOADER_FULLPATH%.img}.qcow2
+		&& mkdir -p "${DISK_PATH%/}"/bak \
+		&& mv -f "${BOOTLOADER_FULLPATH}"${BOOTLOADER_BAK_EXT} "${DISK_PATH%/}"/bak/.
+	rm -f "${BOOTLOADER_FULLPATH%.img}".qcow2
 	if [[ "x${BOOTLOADER_URL}" != "x" ]] || [[ -f ${BOOTLOADER_ALT_PATH} ]]; then
-		rm -f ${BOOTLOADER_FULLPATH}
+		rm -f "${BOOTLOADER_FULLPATH}"
 	fi
 fi
 
 if [[ -f ${BOOTLOADER_ALT_PATH} ]] && [[ ! -f ${BOOTLOADER_FULLPATH} ]]; then
 	log "INFO" "ALT bootloader file found: copy to ${BOOTLOADER_FULLPATH}"
-	cp ${BOOTLOADER_ALT_PATH} ${BOOTLOADER_FULLPATH}
+	cp "${BOOTLOADER_ALT_PATH}" "${BOOTLOADER_FULLPATH}"
 fi
 
 if [[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] ; then
@@ -214,63 +249,65 @@ if [[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] ; then
 		flag_bootl_err=1
 	else
 		log "INFO" "... raw/qcow2 bootloader does not exist. Extracting tgz file."
-		tar -xzOf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} $( tar -tzf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} | head -1 ) > ${BOOTLOADER_FULLPATH}.tmp
+		tar -xzOf "${BOOTLOADER_FULLPATH}""${BOOTLOADER_BAK_EXT}" "$( tar -tzf "${BOOTLOADER_FULLPATH}"${BOOTLOADER_BAK_EXT} | head -1 )" > "${BOOTLOADER_FULLPATH}".tmp
 	fi
 elif [[ -f ${BOOTLOADER_FULLPATH} ]] ; then
 	log "INFO" "SKIP download URL: bootloader file already exists: ${BOOTLOADER_FULLPATH}"
-	mv ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH}.tmp
+	mv "${BOOTLOADER_FULLPATH}" "${BOOTLOADER_FULLPATH}".tmp
 elif [[ "x${BOOTLOADER_URL}" != "x" ]] ; then
 	log "INFO" "Start downloading bootloader from URL: ${BOOTLOADER_URL} ..."
-	wget --no-check-certificate -q --show-progress --progress=dot:giga ${BOOTLOADER_URL} -O ${BOOTLOADER_FULLPATH}.tmp \
+	wget --no-check-certificate -q --show-progress --progress=dot:giga "${BOOTLOADER_URL}" -O "${BOOTLOADER_FULLPATH}".tmp \
 		&& echo "" && log "INFO" "... SUCCESS: file downloaded from URL." \
-		|| ( log "ERROR" "... FAILED: file cannot be downloaded from URL." && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 4 )
+		|| ( log "ERROR" "... FAILED: file cannot be downloaded from URL." && rm -f "${BOOTLOADER_FULLPATH}".tmp* && exit 4 )
 else
 	log "ERROR" "NO BOOTLOADER_URL, NO BOOTLOADER_ALT_PATH and NO ${BOOTLOADER_FULLPATH} file found. Exiting."
 	exit 5
 fi
 
 if [[ -f ${BOOTLOADER_FULLPATH}.tmp ]] ; then
-	if [[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c ": gzip" ) -eq 1 ]]; then
+	if [[ $( file "${BOOTLOADER_FULLPATH}".tmp | grep -c ": gzip" ) -eq 1 ]]; then
 		log "INFO" "Downloaded file is detected as gzip file, extracting ..."
-		tar -xzOf ${BOOTLOADER_FULLPATH}.tmp $( tar -tzf ${BOOTLOADER_FULLPATH}.tmp | head -1 ) > ${BOOTLOADER_FULLPATH}.tmp2 \
+		tar -xzOf "${BOOTLOADER_FULLPATH}".tmp "$( tar -tzf "${BOOTLOADER_FULLPATH}".tmp | head -1 )" > "${BOOTLOADER_FULLPATH}".tmp2 \
 			|| ( log "ERROR" "... FAILED extracting gzip file." && exit 6 )
-	elif [[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c ": Zip" ) -eq 1 ]]; then
+	elif [[ $( file "${BOOTLOADER_FULLPATH}".tmp | grep -c ": Zip" ) -eq 1 ]]; then
 		log "INFO" "Downloaded file is detected as zip file, extracting ..."
-		unzip -p ${BOOTLOADER_FULLPATH}.tmp $( unzip -l ${BOOTLOADER_FULLPATH}.tmp | head -4 | tail -1 | awk '{print $4}' ) > ${BOOTLOADER_FULLPATH}.tmp2 \
+		unzip -p "${BOOTLOADER_FULLPATH}".tmp "$( unzip -l "${BOOTLOADER_FULLPATH}".tmp | head -4 | tail -1 | awk '{print $4}' )" > "${BOOTLOADER_FULLPATH}".tmp2 \
 			|| ( log "ERROR" "... FAILED extracting zip file." && exit 7 )
 	fi
 	
-	[[ -f ${BOOTLOADER_FULLPATH}.tmp2 ]] && mv -f ${BOOTLOADER_FULLPATH}.tmp2 ${BOOTLOADER_FULLPATH}.tmp
+	[[ -f ${BOOTLOADER_FULLPATH}.tmp2 ]] && mv -f "${BOOTLOADER_FULLPATH}".tmp2 "${BOOTLOADER_FULLPATH}".tmp
 	
-	[[ $( file ${BOOTLOADER_FULLPATH}.tmp | grep -c "boot sector" ) -eq 1 ]] \
+	[[ $( file "${BOOTLOADER_FULLPATH}".tmp | grep -c "boot sector" ) -eq 1 ]] \
 		&& log "INFO" "Downloaded file seems bootable! Good good!" \
-		&& mv ${BOOTLOADER_FULLPATH}.tmp ${BOOTLOADER_FULLPATH} \
-		|| ( log "ERROR" "Downloaded file is not bootable!" && rm -f ${BOOTLOADER_FULLPATH}.tmp* && exit 8 )
+		&& mv "${BOOTLOADER_FULLPATH}".tmp "${BOOTLOADER_FULLPATH}" \
+		|| ( log "ERROR" "Downloaded file is not bootable!" && rm -f "${BOOTLOADER_FULLPATH}".tmp* && exit 8 )
 fi
 
-[[ $( ls -l ${BOOTLOADER_FULLPATH}.tmp* 2>/dev/null | wc -l ) -ne 0 ]] && rm -f ${BOOTLOADER_FULLPATH}.tmp*
-
+rm -f "${BOOTLOADER_FULLPATH}".tmp* 2>&1 >/dev/null
 
 # grub.cfg modification
-if [[ $flag_bootl_err -eq 0 ]]; then
+if [[ "${GRUBCFG_ENABLE_MOD}" == [Yy1]* ]] && [[ $flag_bootl_err -eq 0 ]]; then
 	log "INFO" "Backing up bootloader: ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT}"
-	[[ ! -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] && tar -czf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} -C ${BOOTLOADER_FULLPATH%/*} ${BOOTLOADER_FULLPATH##*/} 
+	[[ ! -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] && tar -czf "${BOOTLOADER_FULLPATH}"${BOOTLOADER_BAK_EXT} -C "${BOOTLOADER_FULLPATH%/*}" "${BOOTLOADER_FULLPATH##*/}" 
 	
 	log "INFO" "Modification of grub.cfg ..."
+	if [[ "${BOOTLOADER_AS_USB}" == [Yy1]* ]] && [[ "${GRUBCFG_VID}" == "" ]] && [[ "${GRUBCFG_PID}" == "" ]]; then
+		GRUBCFG_VID='46f4' && GRUBCFG_PID='0001'
+	fi
 	
-	[[ "x${GRUBCFG_VID}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "vid=0x" ${GRUBCFG_VID} 0
-	[[ "x${GRUBCFG_PID}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "pid=0x" ${GRUBCFG_PID} 0
+	[[ "x${GRUBCFG_VID}" != "x" ]] && ddReplaceInFile "${BOOTLOADER_FULLPATH}" "vid=0x" "${GRUBCFG_VID}" 0
+	[[ "x${GRUBCFG_PID}" != "x" ]] && ddReplaceInFile "${BOOTLOADER_FULLPATH}" "pid=0x" "${GRUBCFG_PID}" 0
 	
-	[[ "x${GRUBCFG_SN}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "sn=" ${GRUBCFG_SN} 0
+	[[ "x${GRUBCFG_SN}" != "x" ]] && ddReplaceInFile "${BOOTLOADER_FULLPATH}" "sn=" "${GRUBCFG_SN}" 0
 	
-	GRUBCFG_MAC1="$( echo ${VM_NET_MAC} | tr -cd '[:alnum:]' | tr '[:lower:]' '[:upper:]' )"
-	[[ "x${GRUBCFG_MAC1}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "mac1=" ${GRUBCFG_MAC1} 0
+	GRUBCFG_MAC1="$( echo "${VM_NET_MAC}" | tr -cd '[:alnum:]' | tr '[:lower:]' '[:upper:]' )"
+	[[ "x${GRUBCFG_MAC1}" != "x" ]] && ddReplaceInFile "${BOOTLOADER_FULLPATH}" "mac1=" "${GRUBCFG_MAC1}" 0
 	
-	[[ "x${GRUBCFG_DISKIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "DiskIdxMap=" ${GRUBCFG_DISKIDXMAP} 1
-	[[ "x${GRUBCFG_SATAPORTMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "SataPortMap=" ${GRUBCFG_SATAPORTMAP} 1
-	[[ "x${GRUBCFG_SASIDXMAP}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "SasIdxMap=" ${GRUBCFG_SASIDXMAP} 1
+	[[ "x${GRUBCFG_DISKIDXMAP}" != "x" ]] && ddReplaceInFile "${BOOTLOADER_FULLPATH}" "DiskIdxMap=" "${GRUBCFG_DISKIDXMAP}" 1
+	[[ "x${GRUBCFG_SATAPORTMAP}" != "x" ]] && ddReplaceInFile "${BOOTLOADER_FULLPATH}" "SataPortMap=" "${GRUBCFG_SATAPORTMAP}" 1
+	[[ "x${GRUBCFG_SASIDXMAP}" != "x" ]] && ddReplaceInFile "${BOOTLOADER_FULLPATH}" "SasIdxMap=" "${GRUBCFG_SASIDXMAP}" 1
 	
-	[[ "x${GRUBCFG_HDDHOTPLUG}" != "x" ]] && ddReplaceInFile ${BOOTLOADER_FULLPATH} "HddHotplug=" ${GRUBCFG_HDDHOTPLUG} 0
+	[[ "x${GRUBCFG_HDDHOTPLUG}" != "x" ]] && ddReplaceInFile "${BOOTLOADER_FULLPATH}" "HddHotplug=" "${GRUBCFG_HDDHOTPLUG}" 0
 fi
 
 
@@ -279,7 +316,7 @@ fi
 if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 	log "INFO" "Bootloader convertion ..."
 	if [[ ! -f ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT} ]]; then
-		qemu-img convert -f raw -O ${DISK_FORMAT} ${BOOTLOADER_FULLPATH} ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT} \
+		qemu-img convert -f raw -O "${DISK_FORMAT}" "${BOOTLOADER_FULLPATH}" "${BOOTLOADER_FULLPATH%.img}"."${DISK_FORMAT}" \
 			&& log "INFO" "... SUCCESS: Bootloader has been converted to ${DISK_FORMAT}: ${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}" \
 			|| ( log "ERROR" "... FAILED: Cannot convert Bootloader to ${DISK_FORMAT}. Exiting." && exit 10 )
 	else
@@ -288,24 +325,24 @@ if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 	
 	# delete img bootloader if bak exists
 	[[ -f ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} ]] \
-		&& rm -f ${BOOTLOADER_FULLPATH}
+		&& rm -f "${BOOTLOADER_FULLPATH}"
 
 	BOOTLOADER_FULLPATH=${BOOTLOADER_FULLPATH%.img}.${DISK_FORMAT}
 elif [[ ! -f ${BOOTLOADER_FULLPATH} ]]; then
 	log "INFO" "... copy/extract bak to ${BOOTLOADER_FULLPATH}"
-	tar -xzf ${BOOTLOADER_FULLPATH}${BOOTLOADER_BAK_EXT} -C ${BOOTLOADER_FULLPATH%/*}
+	tar -xzf "${BOOTLOADER_FULLPATH}"${BOOTLOADER_BAK_EXT} -C "${BOOTLOADER_FULLPATH%/*}"
 fi
 
 # Set 1st disk for snapshot
 # ######################################
 i_sata=0
-: ${KVM_PREBOOT:=""}
+: "${KVM_PREBOOT:=""}"
 KVM_PREBOOT="${KVM_PREBOOT} -device 'ahci,id=ahci0,multifunction=on,bus=pcie.0,addr=0x10'"
 if [[ ${DISK_FORMAT} == "qcow2" ]]; then
 	log "INFO" "Adding snapshot disk ... "
 	fpath_diskname_="${DISK_PATH%/}/vm-disk-snapshot.${DISK_FORMAT}"
 	if [[ ! -f ${fpath_diskname_} ]]; then
-		qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} 8M \
+		qemu-img create -f "${DISK_FORMAT}" "${fpath_diskname_}" 8M \
 		  && log "INFO" "... SUCCESS: snapshot disk created: ${fpath_diskname_}" \
 		  || log "ERROR" "... FAILED: Cannot create snapshot disk"
 	else
@@ -337,7 +374,7 @@ fi
 # Add SATA disks
 # ######################################
 log "INFO" "Adding vm disk(s)  ..."
-TMP_KVM_BLK_OPTS="${TMP_KVM_BLK_OPTS}"
+TMP_KVM_BLK_OPTS=""
 fpath_diskname_=""
 diskformat_=""
 
@@ -353,7 +390,7 @@ for size in $DISK_SIZE ; do
 		diskformat_="${DISK_FORMAT}"
 		fpath_diskname_="${DISK_PATH%/}/vm-disk-data${i}.${diskformat_}"
 		if [[ ! -f ${fpath_diskname_} ]]; then
-			qemu-img create -f ${DISK_FORMAT} ${fpath_diskname_} ${size%[Gg]}G \
+			qemu-img create -f "${DISK_FORMAT}" "${fpath_diskname_}" "${size%[Gg]}"G \
 				&& log "INFO" "... SUCCESS: ${DISK_FORMAT} disk created: ${fpath_diskname_}" \
 				|| (log "ERROR" "... FAILED: Cannot create disk" && exit 12)
 		else
@@ -382,11 +419,11 @@ for size in $DISK_SIZE ; do
 		((++i_sata))
 	fi
 done
-: ${KVM_BLK_OPTS:="${TMP_KVM_BLK_OPTS}"}
+: "${KVM_BLK_OPTS:="${TMP_KVM_BLK_OPTS}"}"
 
 # Set Qemu option
 # ######################################
-: ${KVM_OPTS:="\
+: "${KVM_OPTS:="\
   -machine q35 \
   -nodefaults \
   -overcommit mem-lock=off \
@@ -396,21 +433,38 @@ done
   -serial mon:stdio \
   -monitor unix:/run/qemu-monitor.sock,server,nowait \
   -pidfile /run/qemu.pid \
-  "}
+  "}"
+  
   # Removed readconfig but keep file
   # because re-addressing pcie.0 device with addr option 
   # -readconfig /qemu_cfg/pve-q35-4.0.cfg
 
 [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && KVM_OPTS="${KVM_OPTS} -device 'virtio-balloon-pci,id=balloon0,bus=pcie.0,addr=0x2'"
 
+# Enable KVM support only if the host supports it
+# ######################################
+if grep -q -e vmx -e svm /proc/cpuinfo 2>/dev/null; then
+  log "INFO" "KVM acceleration enabled"
+  KVM_OPTS="$KVM_OPTS -enable-kvm -machine accel=kvm,usb=off "
+  #CPU="${CPU},+aes,enforce,+kvm_pv_eoi,+kvm_pv_unhalt,+pni,+popcnt,+sse4.1,+sse4.2,+ssse3"
+  CPU="${CPU},+aes"
+else
+  log "WARNING" "KVM acceleration disabled"
+  #exit -20
+fi
+
 # Set Qemu CPU and RAM
 # ######################################
-SMP=$(($CORES*$THREADS))
-: ${KVM_CPU_OPTS:="-m $RAM -cpu ${CPU} -smp $SMP,sockets=1,cores=$CORES,threads=$THREADS"}
+SMP="$(( CORES * THREADS ))"
+tmpRAM=$(( ($(cat /proc/meminfo | grep MemTotal | awk '{print $2}') / 1024) - VM_CUSTOM_VM_FREERAM_MIN ))
+[[ $RAM -gt $tmpRAM ]] \
+	&& log "WARNING" "Not enough Mem: RAM has been set to $tmpRAM instead of $RAM" \
+	&& RAM="$tmpRAM"
+: "${KVM_CPU_OPTS:="-m $RAM -cpu ${CPU} -smp $SMP,sockets=1,cores=$CORES,threads=$THREADS"}"
 
 # Set 9p
 # ######################################
-: ${KVM_9P:=""}
+: "${KVM_9P:=""}"
 if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && [[ "${VM_ENABLE_9P}" == [Yy1]* ]] && [[ "x${VM_9P_PATH}" != "x" ]]; then 
 	log "INFO" "Adding 9p sharefolders ..."
 
@@ -422,22 +476,16 @@ if [[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] && [[ "${VM_ENABLE_9P}" == [Yy1]* ]] &&
 	done
 fi
 
-# Enable KVM support only if the host supports it
-# ######################################
-if [[ $(grep -e vmx -e svm /proc/cpuinfo) ]]; then
-  log "INFO" "KVM acceleration enabled"
-  KVM_OPTS="$KVM_OPTS -enable-kvm -machine accel=kvm,usb=off "
-else
-  log "WARNING" "KVM acceleration disabled"
-  #exit -20
-fi
-
 # Set Qemu graphics & vnc 
 # ######################################
 if [[ "$VM_ENABLE_VGA" == [Yy1]* ]]; then
-  : ${KVM_VIDEO_OPTS:="-vga qxl -vnc 0.0.0.0:0 -k en-us"}
+# Minimal vga
+#  : ${KVM_VIDEO_OPTS:="-vga qxl -vnc 0.0.0.0:0 -k en-us"}
+  : "${KVM_VIDEO_OPTS:="-device VGA,vgamem_mb=2"}"
+elif [[ "$VM_ENABLE_VGA" == [Nn0]* ]]; then
+  : "${KVM_VIDEO_OPTS:="-nographic"}"
 else
-  : ${KVM_VIDEO_OPTS:="-nographic"}
+  KVM_VIDEO_OPTS="-vga ${VM_ENABLE_VGA}"
 fi
 
 # Configure Network
@@ -445,67 +493,74 @@ fi
 log "INFO" "Configuring network ..."
 #DEFAULT_ROUTE=$(ip route | grep default | awk '{print $3}')
 
-if [[ "x${VM_NET_TAP}" == "x" ]]; then
+if [[ "${VM_NET_TAP}" == "" ]]; then
 	if [[ "${VM_NET_DHCP}" == [Yy1]* ]]; then
 		VM_NET_TAP="_VmMacvtap"
-		log "INFO" "... to retrieve IP via DHCP through Macvtap (${VM_NET_TAP}) and MAC: ${VM_NET_MAC}"
+		log "INFO" "... VM_NET_DHCP=Y works only on LINUX host... MAKE SURE it's a LINUX HOST!"
+		log "INFO" "... creating a macvtap mode bridge (${VM_NET_TAP}) with MAC ${VM_NET_MAC}"
 		
-		ip l add link eth0 name ${VM_NET_TAP} address ${VM_NET_MAC} type macvtap mode bridge || true
-		ip l set ${VM_NET_TAP} up
+		ip l add link eth0 name "${VM_NET_TAP}" address "${VM_NET_MAC}" type macvtap mode bridge \
+			|| ( log "ERROR" "... failed to create macvtap" && exit 15 )
+		ip l set "${VM_NET_TAP}" up
 		
 		ip a flush eth0
-		ip a flush ${VM_NET_TAP}
+		ip a flush "${VM_NET_TAP}"
 		
-		_DhcpIP=$( dhclient -v ${VM_NET_TAP} 2>&1 | grep ^bound | cut -d' ' -f3 )
+		_DhcpIP="$( dhclient -v ${VM_NET_TAP} 2>&1 | grep ^bound | cut -d' ' -f3 )"
 		[[ "${_DhcpIP}" == [0-9.]* ]] \
-		&& log "INFO" "... Retrieve IP: ${_DhcpIP} from DHCP with MAC: ${VM_NET_MAC}" \
-		|| ( log "ERROR" "... Cannot retrieve IP from DHCP with MAC: ${VM_NET_MAC}" && exit 16 )
+		&& log "INFO" "... Retrieve IP: ${_DhcpIP} from DHCP" \
+		|| ( log "ERROR" "... Cannot retrieve IP from DHCP, have you created a macvlan on host and use --net <host_macvlan> option?" && exit 16 )
 
-		ip a flush ${VM_NET_TAP}
+		ip a flush "${VM_NET_TAP}"
 		
 		_tmpTapPath="/dev/tap$(</sys/class/net/${VM_NET_TAP}/ifindex)"
 		# get MAJOR MINOR DEVNAME
 		MAJOR=""
-		eval "$(</sys/class/net/${VM_NET_TAP}/macvtap/${_tmpTapPath##*/}/uevent) _tmp=0"
+		eval "$( grep -e MAJOR= -e MINOR= </sys/class/net/${VM_NET_TAP}/macvtap/"${_tmpTapPath##*/}"/uevent ) _tmp=0"
 		
 		[[ "x${MAJOR}" != "x" ]] \
 			&& log "INFO" "... PLEASE MAKE SURE, Docker run command line used: --device-cgroup-rule='c ${MAJOR}:* rwm'" \
-			|| ( log "ERROR" "... macvtap creation issue: Cannot find: /sys/class/net/${VM_NET_TAP}/" && exit 18 )
+			|| ( log "ERROR" "... macvtap issue: Cannot find: /sys/class/net/${VM_NET_TAP}/macvtap/${_tmpTapPath##*/}/uevent" && exit 18 )
 		
-		[[ ! -e ${_tmpTapPath} ]] && [[ -e /dev0/${_tmpTapPath##*/} ]] && ln -s /dev0/${_tmpTapPath##*/} ${_tmpTapPath}
+		[[ ! -e ${_tmpTapPath} ]] && [[ -e /dev0/${_tmpTapPath##*/} ]] && ln -s /dev0/"${_tmpTapPath##*/}" "${_tmpTapPath}"
 		
 		if [[ ! -e ${_tmpTapPath} ]]; then
 			log "WARNING" "... file does not exist: ${_tmpTapPath}"
-			mknod ${_tmpTapPath} c $MAJOR $MINOR \
+			mknod "${_tmpTapPath}" c "$MAJOR" "$MINOR" \
 				&& log "INFO" "... File created with mknod: ${_tmpTapPath}" \
 				|| ( log "ERROR" "... Cannot mknod: ${_tmpTapPath}" && exit 20 )
 		fi
-		KVM_NET_OPTS="-netdev tap,id=hostnet0,vhost=on,vhostfd=40,fd=30 30<>${_tmpTapPath} 40<>/dev/vhost-net"
+		
+		[[ -e /dev/vhost-net ]] && [[ "x$(lsmod | grep vhost)" != "x" ]] \
+			&& KVM_NET_OPTS="-netdev tap,id=hostnet0,vhost=on,vhostfd=40,fd=30 30<>${_tmpTapPath} 40<>/dev/vhost-net" \
+			|| KVM_NET_OPTS="-netdev tap,id=hostnet0,fd=30 30<>${_tmpTapPath}"
 	else
 		VM_NET_TAP="_VmNatTap"
 		log "INFO" "... NAT Network (${VM_NET_TAP}) to ${VM_NET_IP}"
 		configureNatNetworks
 		KVM_NET_OPTS="-netdev tap,ifname=${VM_NET_TAP},script=no,downscript=no,id=hostnet0"
 		
+		
+		log "INFO" "... Configuring dnsmasq"
 		# Build DNS options from container /etc/resolv.conf
-		nameservers=($(grep '^nameserver' /etc/resolv.conf | sed 's/nameserver //'))
+		nameservers=( $(grep '^nameserver' /etc/resolv.conf | cut -d' ' -f2) )
 		searchdomains=$(grep '^search' /etc/resolv.conf | sed 's/search //' | sed 's/ /,/g')
-		domainname=$(echo $searchdomains | awk -F"," '{print $1}')
+		domainname=$(echo "$searchdomains" | awk -F"," '{print $1}')
 
 		for nameserver in "${nameservers[@]}"; do
-		  [[ -z $DNS_SERVERS ]] && DNS_SERVERS=$nameserver || DNS_SERVERS="$DNS_SERVERS,$nameserver"
+			echo "$DNS_SERVERS" | grep -qi "$nameserver" || DNS_SERVERS="$DNS_SERVERS,$nameserver"
+			DNS_SERVERS="${DNS_SERVERS#,}"
 		done
-		DNSMASQ_OPTS="$DNSMASQ_OPTS                         \
-		  --dhcp-option=option:dns-server,$DNS_SERVERS      \
-		  --dhcp-option=option:router,${VM_NET_IP%.*}.1         \
-		  --dhcp-option=option:domain-search,$searchdomains \
-		  --dhcp-option=option:domain-name,$domainname      \
-		  "
+		DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:dns-server,$DNS_SERVERS --dhcp-option=option:router,${VM_NET_IP%.*}.1"
+		[[ "x${searchdomains#.}" != "x" ]] && DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-search,$searchdomains"
+		[[ "x${domainname#.}" != "x" ]] && DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-name,$domainname"
 		[[ -z $(hostname -d) ]] || DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-name,$(hostname -d)"
 
 		log "INFO" "... Lauching dnsmasq"
-		log "DEBUG" "dnsmasq options: $DNSMASQ_OPTS"
-		$DNSMASQ $DNSMASQ_OPTS
+		log "DEBUG" "... dnsmasq options: $DNSMASQ_OPTS"
+		
+		pgrep -if dnsmasq.*${VM_NET_IP} 2>&1 >/dev/null \
+			|| $DNSMASQ $DNSMASQ_OPTS
 	fi
 else
 	log "INFO" "... No configuration, just using tuntap : ${VM_NET_TAP}"
@@ -513,33 +568,40 @@ else
 fi
 
 #KVM_NET_OPTS="-netdev user,hostfwd=tcp:127.0.0.1:5000-:5000"
-[[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] \
-	&& KVM_NET_OPTS="${KVM_NET_OPTS} -device virtio-net-pci,netdev=hostnet0,mac=${VM_NET_MAC},id=net0" \
-	|| KVM_NET_OPTS="${KVM_NET_OPTS} -device e1000e,netdev=hostnet0,mac=${VM_NET_MAC},id=net0"
+#KVM_NET_OPTS="-netdev user,id=hostnet0"
 
+[[ "${VM_ENABLE_VIRTIO}" == [Yy1]* ]] \
+	&& KVM_NET_OPTS="${KVM_NET_OPTS} -device virtio-net-pci,rx_queue_size=1024,tx_queue_size=256" \
+	|| KVM_NET_OPTS="${KVM_NET_OPTS} -device e1000"
+KVM_NET_OPTS="${KVM_NET_OPTS},netdev=hostnet0,mac=${VM_NET_MAC},id=net0"
 
 # Hack for guest VMs complaining about "bad udp checksums in 5 packets"
 log "INFO" "Hack for guest VMs complaining about: bad udp checksums in 5 packets"
 iptables -A POSTROUTING -t mangle -p udp --dport bootpc -j CHECKSUM --checksum-fill \
-        || ( log "WARNING" "Iptables hack for checksum FAILED" && ethtool -K eth0 tx off || true )
+	|| ( log "WARNING" "Iptables hack for checksum FAILED" && ethtool -K eth0 tx off || true )
 
 if [[ "x${VM_CUSTOM_CODE}" != "x" ]]; then
 	log "INFO" "Running custom code ..."
 	log "INFO" "... ${VM_CUSTOM_CODE}"
-	eval ${VM_CUSTOM_CODE}
+	eval "${VM_CUSTOM_CODE}"
 fi
 
 [[ "x${MAJOR}" != "x" ]] && log "INFO" "PLEASE MAKE SURE, Docker is using the following option otherwise you may have permission issue on ${_tmpTapPath} file: --device-cgroup-rule='c ${MAJOR}:* rwm' "
-[[ "${_DhcpIP}" == [0-9.]* ]] && log "INFO" "You should access your DSM with: http://${_DhcpIP}:5000"
+
+log "INFO" "********************************************************************************"
+[[ "${_DhcpIP}" == [0-9.]* ]] \
+	&& log "INFO" "**** You should access your DSM with: http://${_DhcpIP}:5000" \
+	|| log "INFO" "**** You should access your DSM with: http://DOCKER_HOST_IP:5000"
+log "INFO" "********************************************************************************"
 
 log "INFO" "Pause for ${VM_CUSTOM_BOOTWAIT}s, please wait ..."
-sleep ${VM_CUSTOM_BOOTWAIT}
+sleep "${VM_CUSTOM_BOOTWAIT}"
 
 # Launching Qemu VM command
 # ######################################
 log "INFO" "Launching qemu-kvm ..."
-COMMAND="$LAUNCHER ${KVM_OPTS} ${KVM_PREBOOT} ${KVM_SYNOBOOT} ${KVM_BLK_OPTS} ${KVM_VIDEO_OPTS} ${KVM_CPU_OPTS} ${KVM_NET_OPTS} ${KVM_9P} ${VM_CUSTOM_OPTS}"
+COMMAND="$LAUNCHER ${KVM_OPTS} ${KVM_PREBOOT} ${KVM_SYNOBOOT} ${KVM_BLK_OPTS} ${KVM_VIDEO_OPTS} ${KVM_CPU_OPTS} ${KVM_9P} ${VM_CUSTOM_OPTS} ${KVM_NET_OPTS}"
 log "DEBUG" "${COMMAND}"
 trap '/usr/bin/vm-power-down' SIGTERM
 trap '/usr/bin/vm-power-down' SIGINT
-eval ${COMMAND}
+eval "${COMMAND}"
