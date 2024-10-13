@@ -7,18 +7,22 @@ So technically it can run any bootloader you provide.
 
 Latest tested (for DS3615xs):
 - 6.2.3 with Jun's 1.03b (virtio+9p)
-- 7.0.1 with redpill (virtio+9p)
+- rr 24.10 (virtio+9p) from https://github.com/RROrg/rr/releases/download/24.10.0/rr-24.10.0.img.zip
 
 UPDATE:
-- PID, VID and SN (Serial Number) can now be pass as parameter to Docker, the bootloader is modified during the first boot.
+- PID, VID and SN (Serial Number) can now be pass as parameter to Docker, the bootloader is modified during the first boot. (work with Jun's bootloader)
 - Redpill bootloader compatibility
 - Run without BOOTLOADER_URL by using local file with following docker option: `-v /path/myfile:/bootloader`
 
 ## Warning / Disclaimer
 
-This system is for testing or educational purpose ONLY, and It is NOT recommended for using in production environment because it has no support, and it has not been proven  stable/reliable.
+This project contains only open-source code and does not distribute any copyrighted material.
 
-So DATA LOSS can happen by using this system due to its instability, SO this is ONLY on your own responsibility to use.
+This is for testing or educational purpose ONLY, and It is NOT recommended for using in production environment because it has no support, and it has not been proven stable/reliable.
+
+Be aware that, Synology's Virtual DSM end-user license agreement does not permit installation on non-Synology hardware. So comply with this by using Synology hardware. 
+
+DATA LOSS can happen by using this system due to its instability, SO this is ONLY on your own responsibility to use.
 
 If you are happy with the testing of this product, I would highly recommend you to go for an original Synology hardware, especially for PRODUCTION environment where data is critical.
 
@@ -32,6 +36,8 @@ Tutorial: https://www.uxora.com/other/virtualization/57-xpenology-on-docker
 
 Compile Redpill bootloader: https://github.com/uxora-com/rpext
 
+NEW: rr bootloader: https://github.com/RROrg/rr
+
 ## Testing Notes
 Personal testing has been done with ds3615xs jun's loader 1.03b and RedPill (with virtio/9p drivers).
 
@@ -40,6 +46,7 @@ Personal testing has been done with ds3615xs jun's loader 1.03b and RedPill (wit
 	- Proxmox 6.4-13 Kernel 5.4.140-1-pve
 	- Template lxc "debian-10-standard_10.5-1_amd64"
 	- dsm 6.2.3/7.0.1-42218 OK, Live snapshot OK, 9p mount OK
+	- dsm 7.2.2-72806, Live snapshot OK, 9p mount OK
 
 - MxLinux live usb (OK):
 	- Cpu Intel i7
@@ -49,10 +56,12 @@ Personal testing has been done with ds3615xs jun's loader 1.03b and RedPill (wit
 - Windows 10 docker (OK but Slow):
 	- Intel i7 cpu
 	- dsm 6.2.3/7.0.1-42218 OK but very slow for loading bootloader
+	- dsm 7.2.2-72806 OK
 
 - Proxmox VM Linux Debian 10 (OK):
 	- Nested virtualization all set and validated with virt-host-validate
 	- dsm 7.0.1-42218 OK, Live snapshot OK, 9p mount OK
+	- dsm 7.2.2-72806 OK, Live snapshot OK, 9p mount OK
 
 If you have any issue, please raise it in "issues" area.
 
@@ -61,7 +70,6 @@ If you have any issue, please raise it in "issues" area.
 
 This image provides some special features to get the VM running as straightforward as possible
 - VM NAT (default): NAT + Port Forwarding: "DOCKER_HOST_IP:5000" (port 5000 can be different depends on your ports mapping)
-- VM Fixed IP: NAT + Port Forwarding + fixed IP with macvlan: "FIXED_IP:5000" (see Notes section below)
 - VM DHCP: DHCP with macvtap: "DHCP_IP:5000" (see Notes section below)
 - Live Snapshot: Create and restore (pretty useful to test update)
 - 9P Mountpoints (Access host docker volumes from Xpenology)
@@ -89,16 +97,17 @@ $ docker run --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 \
 # Run with more specific parameters
 $ docker run --name="xpenodock" --hostname="xpenodock" \
     --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 \
-    --device=/dev/net/tun --device=/dev/kvm \
+    --device=/dev/net/tun --device=/dev/kvm --device=/dev/vhost-net \
     -p 5000-5001:5000-5001 -p 2222:22 -p 8080:80 \
-    -e CPU="qemu64" -e THREADS=1 -e RAM=512 \
-    -e DISK_SIZE="8G 16G" -e DISK_PATH="/xpy/diskvm" \
+    -p 137-139:137-139 -p 443-445:443-445 -p 6690:6690 \
+    -p 7304:7304 -p 7681:7681 \
+    -e CPU="qemu64" -e THREADS=1 -e RAM=2048 \
+    -e DISK_SIZE="16G 16G" -e DISK_PATH="/xpy/diskvm" \
     -e VM_ENABLE_9P="Y" -e VM_9P_PATH="/xpy/share9p" \
     -e BOOTLOADER_AS_USB="Y" -e VM_ENABLE_VIRTIO="Y" \
     -e BOOTLOADER_URL="http://example.com/path/synoboot.zip" \
     -e GRUBCFG_SATAPORTMAP="6" -e GRUBCFG_DISKIDXMAP="00" \
-    -v /host_dir/data:/xpy/share9p \
-    -v /host_dir/kvm:/xpy/diskvm \
+    -v /host_dir/data:/xpy/share9p -v /host_dir/kvm:/xpy/diskvm \
     uxora/xpenology
 ```
 
@@ -117,7 +126,7 @@ Multiples environment variables can be modified to alter default runtime.
 * CPU: (Default "qemu64") type of cpu
 * THREADS: (Default "1") number of cpu threads per core
 * CORES: (Default "1") number of cpu cores
-* RAM: (Default "512") number of ram memory in MB
+* RAM: (Default "2048") number of ram memory in MB
 
 
 * DISK_SIZE:(Default "16") Size of virtual disk in GB
@@ -126,7 +135,6 @@ Multiples environment variables can be modified to alter default runtime.
 	* It is now possible to pass the full disk device  (i.e. DISK_SIZE="8G /dev/sdc")
 
 * DISK_FORMAT: (Default "qcow2") Type of disk format (qcow2 support snapshot), check [here](https://en.wikibooks.org/wiki/QEMU/Images) for more details.
-* DISK_CACHE: (DEPRECATED) Replace by DISK_OPTS_DRV.
 * DISK_OPTS_DRV: (Default "cache=writeback,discard=on,aio=threads,detect-zeroes=on")
 	* Additional option for disk drive. check [here](https://en.wikibooks.org/wiki/QEMU/Devices/Storage) for more details.
 * DISK_OPTS_DEV: (Default "rotation_rate=1")
@@ -145,7 +153,7 @@ Multiples environment variables can be modified to alter default runtime.
 * VM_NET_MAC: (Default "00:11:32:2C:A7:85") Mac address use for VM DHCP to assigne VM_NET_IP. This need to match MAC set in xpenology grub bootloader. 
 
 
-* VM_ENABLE_VGA: (Default "No") Enabling qxl vga and vnc. Not needed for Xpenology.
+* VM_ENABLE_VGA: (Default "Yes") Enabling qxl vga and vnc. Not needed for Xpenology.
 * VM_ENABLE_VIRTIO: (Default "Yes") Enabling virtio disk. Make sure that bootloader has virtio drivers.
 * VM_ENABLE_VIRTIO_SCSI: (Default "No") Enabling virtio scsi disk. Make sure that bootloader has virtio drivers.
 	* VM_ENABLE_VIRTIO auto enabled.
@@ -167,7 +175,7 @@ Multiples environment variables can be modified to alter default runtime.
 * VM_TIMEOUT_POWERDOWN: (Default "30") Timeout for vm-power-down command
 
 
-* GRUBCFG_AUTO: (Default "Y") Auto set GRUBCFG_VID/GRUBCFG_PID if empty, depending on BOOTLOADER_AS_USB value.
+* GRUBCFG_ENABLE_MOD: (Default "N") Auto set GRUBCFG_VID/GRUBCFG_PID if empty, depending on BOOTLOADER_AS_USB value. (Not needed for RR bootloader)
 * GRUBCFG_VID: (Default "") VendorID of bootloader disk.
 * GRUBCFG_PID: (Default "") ProductID of bootloader disk.
 * GRUBCFG_SN: (Default "") Serial number of DSM.
@@ -203,6 +211,7 @@ If you want to make some code changes of your own.
 ```bash
 $ git clone https://github.com/uxora-com/xpenology-docker.git
 $ cd xpenology-docker
+$ # Make all your personal changed
 $ docker build -t uxora/xpenology .
 ```
 
@@ -222,8 +231,9 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
     --cap-add=NET_ADMIN --sysctl net.ipv4.ip_forward=1 \
     --device=/dev/net/tun --device=/dev/kvm \
     -p 5000-5001:5000-5001 -p 2222:22 -p 8080:80 \
-    -p 137-139:137-139 -p 445:445 \
-    -e RAM="512" -e DISK_SIZE="16G" \
+    -p 137-139:137-139 -p 443-445:443-445 -p 6690:6690 \
+    -p 7304:7304 -p 7681:7681 \
+    -e RAM="1024" -e DISK_SIZE="16G" \
     -e GRUBCFG_SN="1234ABC012345" \
     -e GRUBCFG_SATAPORTMAP="6" -e GRUBCFG_DISKIDXMAP="00" \
     -e DISK_PATH="/xpy/diskvm" -e VM_9P_PATH="/xpy/share9p" \
@@ -250,9 +260,7 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
     --device=/dev/net/tun --device=/dev/kvm \
     --network macvlan0 --ip=192.168.0.100 \
     -e BOOTLOADER_URL="http://myurl/synoboot.tgz" \
-    -e RAM="512" -e DISK_SIZE="16G" \
-    -e GRUBCFG_SN="1234ABC012345" \
-    -e GRUBCFG_SATAPORTMAP="6" -e GRUBCFG_DISKIDXMAP="00" \
+    -e RAM="2048" -e DISK_SIZE="32G" \
     -e DISK_PATH="/xpy/diskvm" -e VM_9P_PATH="/xpy/share9p" \
     -v /host_dir/kvm:/xpy/diskvm -v /host_dir/data:/xpy/share9p \
     uxora/xpenology
@@ -274,10 +282,8 @@ $ docker run --name="xpenodock" --hostname="xpenodock" \
     --cap-add=NET_ADMIN --device-cgroup-rule='c 235:* rwm' \
     --device=/dev/net/tun --device=/dev/kvm --device=/dev/vhost-net \
     --network macvlan0 -e VM_NET_DHCP="Y" \
-    -e BOOTLOADER_URL="http://myurl/synoboot.tgz" \
-    -e RAM="512" -e DISK_SIZE="16G" \
-    -e GRUBCFG_SN="1234ABC012345" \
-    -e GRUBCFG_SATAPORTMAP="6" -e GRUBCFG_DISKIDXMAP="00" \
+    -e BOOTLOADER_URL="https://github.com/RROrg/rr/releases/download/24.10.0/rr-24.10.0.img.zip" \
+    -e RAM="2048" -e DISK_SIZE="32G" \
     -e DISK_PATH="/xpy/diskvm" -e VM_9P_PATH="/xpy/share9p" \
     -v /host_dir/kvm:/xpy/diskvm -v /host_dir/data:/xpy/share9p \
     uxora/xpenology
