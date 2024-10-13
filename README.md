@@ -2,7 +2,7 @@
 
 KVM VirtualMachine of Xpenology DSM running in a docker container, which can be run directly from docker-hub by specifying a BOOTLOADER_URL or a local file.
 
-This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3/7.2 with jun and redpill bootloader.
+This is just a kvm in docker which has been configured (and tested) to run xpenology dsm 6.2.3/7.2.2 with jun and redpill bootloader.
 So technically it can run any bootloader you provide.
 
 Latest tested (for DS3615xs):
@@ -43,7 +43,7 @@ Personal testing has been done with ds3615xs jun's loader 1.03b and RedPill (wit
 
 - Proxmox Lxc (OK):
 	- Cpu AMD
-	- Proxmox 6.4-13 Kernel 5.4.140-1-pve
+	- Proxmox 8.2-7
 	- Template lxc "debian-10-standard_10.5-1_amd64"
 	- dsm 6.2.3/7.0.1-42218 OK, Live snapshot OK, 9p mount OK
 	- dsm 7.2.2-72806, Live snapshot OK, 9p mount OK
@@ -222,6 +222,9 @@ You need xpenology bootloader image with virtio drivers for better compatibility
 Check [this forum](https://xpenology.com/forum/) for more details about xpenology bootloader.
 
 And follow [this tutorial](https://xpenology.club/compile-drivers-xpenology-with-windows-10-and-build-in-bash) if you want to compile drivers for your specific xpenology version.
+(RR bootloader already include a lot of module and drivers, so you probably does not need that with RR bootloader)
+
+If you use RR bootloader, you may want to check this tutorial before: https://xpenology.com/forum/topic/69718-tuto-dsm-7-pour-tous/ 
 
 ### Running docker without BOOTLOADER_URL
 
