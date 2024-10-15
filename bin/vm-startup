@@ -547,13 +547,15 @@ if [[ "${VM_NET_TAP}" == "" ]]; then
 		searchdomains=$(grep '^search' /etc/resolv.conf | sed 's/search //' | sed 's/ /,/g')
 		domainname=$(echo "$searchdomains" | awk -F"," '{print $1}')
 
+		DNS_SERVERS="1.1.1.1"
 		for nameserver in "${nameservers[@]}"; do
 			echo "$DNS_SERVERS" | grep -qi "$nameserver" || DNS_SERVERS="$DNS_SERVERS,$nameserver"
-			DNS_SERVERS="${DNS_SERVERS#,}"
 		done
 		DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:dns-server,$DNS_SERVERS --dhcp-option=option:router,${VM_NET_IP%.*}.1"
-		[[ "x${searchdomains#.}" != "x" ]] && DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-search,$searchdomains"
-		[[ "x${domainname#.}" != "x" ]] && DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-name,$domainname"
+		#[[ "x${searchdomains#.}" != "x" ]] && 
+		DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-search,$searchdomains"
+		#[[ "x${domainname#.}" != "x" ]] && 
+		DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-name,$domainname"
 		[[ -z $(hostname -d) ]] || DNSMASQ_OPTS="$DNSMASQ_OPTS --dhcp-option=option:domain-name,$(hostname -d)"
 
 		log "INFO" "... Lauching dnsmasq"
@@ -589,19 +591,26 @@ fi
 [[ "x${MAJOR}" != "x" ]] && log "INFO" "PLEASE MAKE SURE, Docker is using the following option otherwise you may have permission issue on ${_tmpTapPath} file: --device-cgroup-rule='c ${MAJOR}:* rwm' "
 
 log "INFO" "********************************************************************************"
-[[ "${_DhcpIP}" == [0-9.]* ]] \
-	&& log "INFO" "**** You should access your DSM with: http://${_DhcpIP}:5000" \
-	|| log "INFO" "**** You should access your DSM with: http://DOCKER_HOST_IP:5000"
+if [[ "${_DhcpIP}" == [0-9.]* ]]; then
+	log "INFO" "**** You should access your DSM with: http://${_DhcpIP}:5000"
+else
+	log "INFO" "**** You should access your DSM with:"
+	log "INFO" "****     - http://DOCKER_HOST_IP:5000"
+	log "INFO" "****     - http://$( ip a show eth0 | grep inet | awk -F'[ /]+' '{print $3}' | head -1 ):5000"
+fi
 log "INFO" "********************************************************************************"
 
 log "INFO" "Pause for ${VM_CUSTOM_BOOTWAIT}s, please wait ..."
 sleep "${VM_CUSTOM_BOOTWAIT}"
+
+printf "\n\n\n\n"
 
 # Launching Qemu VM command
 # ######################################
 log "INFO" "Launching qemu-kvm ..."
 COMMAND="$LAUNCHER ${KVM_OPTS} ${KVM_PREBOOT} ${KVM_SYNOBOOT} ${KVM_BLK_OPTS} ${KVM_VIDEO_OPTS} ${KVM_CPU_OPTS} ${KVM_9P} ${VM_CUSTOM_OPTS} ${KVM_NET_OPTS}"
 log "DEBUG" "${COMMAND}"
+printf "\n\n\n\n\n\n\n\n"
 trap '/usr/bin/vm-power-down' SIGTERM
 trap '/usr/bin/vm-power-down' SIGINT
 eval "${COMMAND}"
